@@ -223,7 +223,21 @@ compose stack, and a mutation sweep that grades the suite itself.
 
 ## 4. Coverage matrix
 
-### 4.1 Codec (`PKIConformance.ACME.Codec.Tests`) ⬜
+### 4.1 Codec (`PKIConformance.ACME.Codec.Tests`) ✅ 87
+
+*Phase 1, 2026-11-26: 87 of 87 natively in WSL; on Windows 86 and one skip
+(the example certificate of RFC 9773 is valid from 0001-01-01, which the
+certificate store of Windows cannot hold; an equivalent certificate of its
+key identifier and serial covers it there). No finding: Hermod's account key
+and the PKI's `ACMEJWS` agree with the RFC examples and with `RawACME`
+throughout.* What is not reachable at this layer moves on: Hermod's JWS
+assembly, its external account binding and its CSR are private to
+`ACMEClient` (phase 3, through `ScriptedACMEServer`); the PKI's ARI
+identifier parsing and its key change are behind its HTTP resources
+(phase 2). Noted on the way for phase 2: the PKI counts the bits of an RSA
+modulus by whole octets and does not look at the public exponent (e = 1 or
+an even e would be taken), and whether `ECDsa.Create` refuses a point off
+the curve on Linux as it does on Windows is a question for both legs.
 
 | RFC | Topic | Focus |
 |---|---|---|
@@ -445,7 +459,7 @@ enrolment protocols (EST, RFC 7030) later, without renaming anything.
 |---|---|---|
 | 0 ✅ | *Done 2026-11-26, locally on Windows and natively in WSL; CI not run yet.* Submodules Norn, Urdr, WWCP_Node, WWCP_Core; slnx; build on Windows and in WSL with `SkipFrontendBuild`; Core skeleton (`Wsl`, categories, `IACMEServerUnderTest`, PKI fixture); CI skeleton; **spikes**: PKI over HTTPS, PKI in-process reachable from WSL | `dotnet build` green on both legs, one trivial interop test (lego registers an account) green in WSL |
 | M | *In Hermod and the PKI, not here:* the ACME server moves into Hermod with an issuer interface; the PKI plugs in its CA; T-S5 on the way. Here: `HermodACMEServer` as a second `IACMEServerUnderTest`, the pins advanced | the server suites green against both implementations |
-| 1 | `RawACME` + Codec tests | all RFC vectors green; Hermod ↔ RawACME ↔ PKI sign/verify in every direction |
+| 1 ✅ | *Done 2026-11-26: 87 tests, no finding.* `RawACME` (`src/PKIConformance.Core/RawACME`: base64url, JWK, thumbprint, JWS, key authorization, EAB, key change, ARI id) + Codec tests | all RFC vectors green; Hermod ↔ RawACME ↔ PKI sign/verify in every direction |
 | 2 | Server + Validation conformance | ~150 tests; first findings round for the PKI |
 | 3 | `ScriptedACMEServer` + Client conformance | ~80 tests; first findings round for Hermod |
 | 4 | Interop A: certbot, acme.sh, dehydrated, uacme (Debian) and **lego** (pinned upstream v5) → PKI; BIND/RFC 2136 | matrix §4.5 filled except the ARI cells of certbot |

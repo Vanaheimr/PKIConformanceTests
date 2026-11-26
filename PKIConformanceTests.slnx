@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/conformance/">
+    <Project Path="conformance/PKIConformance.ACME.Codec.Tests/PKIConformance.ACME.Codec.Tests.csproj" />
     <Project Path="conformance/PKIConformance.ACME.Server.Tests/PKIConformance.ACME.Server.Tests.csproj" />
   </Folder>
   <Folder Name="/interop/">
