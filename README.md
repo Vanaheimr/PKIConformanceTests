@@ -18,14 +18,17 @@ suite's own, RFC vectors, openssl, and the peers.
 - [PLAN.md](PLAN.md) - what is tested, how, in which order, and the ToDos
 - [FINDINGS.md](FINDINGS.md) - where the implementations deviate from the RFCs
 
-**State (2026-11-26, PKI `ba8324a9`, Hermod `0a93a6fb`):** phases 0 to 2
-done - natively in WSL 329 ✅ · 43 ❌ of 372 (87 codec, 239 server, 40
-validation, 6 lego 5.7.0 interop), and every red one is a finding or a ToDo:
-**14 findings** against the PKI's server and validator, S-1 to S-13 and V-1 -
-among them dns-01, which never validates - tagged `KnownIssue`, and one
-tracker of T-S5, tagged `ToDo`. On Windows S-3 is red as well, the 6 lego
-tests skip (the Windows firewall keeps WSL out), and so does the one test of
-a certificate dated 0001, which Windows cannot load.
+**State (2026-11-26, PKI `ba8324a9`, Hermod `0a93a6fb`):** phases 0 to 3
+done - natively in WSL 452 ✅ · 86 ❌ of 538 (87 codec, 239 server, 40
+validation, 166 client, 6 lego 5.7.0 interop), and every red one is a finding
+or a ToDo: **28 findings**, tagged `KnownIssue` - 14 against the PKI's server
+and validator, S-1 to S-13 and V-1 (among them dns-01, which never
+validates), and 14 against Hermod's client and certificate manager, C-1 to
+C-11 and M-1 to M-3 (among them a certificate chain with a private key in
+it, which the client takes) - and 13 trackers of ToDos, T-S5 and T-C1 to
+T-C12, tagged `ToDo`. On Windows S-3 is red as well, the 6 lego tests skip
+(the Windows firewall keeps WSL out), and so do the test of a certificate
+dated 0001, which Windows cannot load, and the one of a key file's POSIX mode.
 
 ## Running
 
@@ -65,7 +68,7 @@ wsl sh build/test-in-wsl.sh -c Release --filter "TestCategory=WSL"
 ```
 src/PKIConformance.Core/                 servers under test, peers, WSL bridge, gating
 src/PKIConformance.Core/RawACME/         the reference codec: no Hermod, no PKI, System.Text.Json
-src/PKIConformance.Core/Scripted/        RawACMEClient, and the bench's web and name servers
+src/PKIConformance.Core/Scripted/        RawACMEClient, ScriptedACMEServer, the bench's web and name servers, CA and clock
 conformance/PKIConformance.ACME.*.Tests/ offline, loopback only
 interop/PKIInterop.*.Tests/              real peers
 build/                                   shared MSBuild settings, peers, scripts

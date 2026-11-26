@@ -253,6 +253,236 @@ wanted: the first profile, or one marked as the default.
 
 Tests: `ProfileWithoutDefaultTests.An_Order_Without_A_Profile_Gets_One`.
 
+### Round 2 - Hermod's client and certificate manager (phase 3, 2026-11-26, Hermod `0a93a6fb`)
+
+Against `ScriptedACMEServer`, the suite's own server written from the RFC.
+Paths below are relative to `libs/Hermod/Hermod/`.
+
+| ID | Level | In short |
+|---|---|---|
+| [C-1](#c-1) | MUST | a certificate chain with a private key - or anything else but certificates - in it is taken |
+| [C-2](#c-2) | MUST | the "url" and the "kid" are the URL re-encoded by `System.Uri`, not the string the server handed out |
+| [C-3](#c-3) | MUST | the retry after a badNonce takes the oldest nonce of the pool, not the one of the badNonce |
+| [C-4](#c-4) | MUST | a Replay-Nonce that is no base64url is kept and sent |
+| [C-5](#c-5) | MUST NOT | a mailto: contact with hfields, or with two addresses, is sent |
+| [C-6](#c-6) | MUST | a RenewalInfo whose window ends when it starts is taken as a window |
+| [C-7](#c-7) | SHOULD NOT | a profile the directory does not advertise is asked for |
+| [C-8](#c-8) | SHOULD NOT | an authorization is polled before the server's validation request came |
+| [C-9](#c-9) | SHOULD | a Retry-After date is read by the system clock, not by the client's TimeProvider |
+| [C-10](#c-10) | SHOULD | the User-Agent names the ACME software, not the HTTP client below it |
+| [C-11](#c-11) | SHOULD | no Accept-Language is sent |
+| [M-1](#m-1) | MUST | the Retry-After of a RenewalInfo is not followed: the window is asked for every six hours |
+| [M-2](#m-2) | SHOULD | the window of a renewed certificate is first asked for six hours after its issuance |
+| [M-3](#m-3) | SHOULD | the explanationURL of a RenewalInfo reaches nobody |
+
+#### C-1
+
+RFC 8555, section 11.4: *"When processing a file of type
+"application/pem-certificate-chain", a client SHOULD verify that the file
+contains only encoded certificates. If anything other than a certificate is
+found (i.e., if the string "-----BEGIN" is ever followed by anything other
+than "CERTIFICATE"), then the client MUST reject the file as invalid."* - the
+key replacement attack of the same section: a server puts a private key of
+its choosing into the chain.
+
+`ACME/ACMEClient.cs:390` takes the body of the download as it is, and
+`TLS/ServerCertificateChain.cs:215` (`X509Certificate2Collection.ImportFromPem`)
+skips every block that is no certificate. A "PRIVATE KEY", "EC PRIVATE KEY",
+"RSA PRIVATE KEY", "PUBLIC KEY" or "X509 CRL" in the chain is accepted, kept in
+`ACMECertificate.FullChainPem` (`ACME/ACMEClient.cs:575`) - and written by the
+manager into fullchain.pem, where whatever reads a key out of the
+certificate file (a `ServerCertificateFile` without a key path, an nginx with
+one file for both) finds the server's key instead of its own. Hermod itself
+is safe as long as it passes its own key separately. Fix: refuse the
+download unless every "-----BEGIN " is followed by "CERTIFICATE-----".
+
+Tests: `CertificateTests.A_Chain_With_Anything_But_Certificates_Is_Rejected` (5).
+
+#### C-2
+
+RFC 8555, section 6.4: *"the client MUST set the "url" header parameter to
+the exact string provided by the server (rather than performing any
+re-encoding on the URL)"*; section 6.2: the "kid" *"MUST contain the account
+URL received by POSTing to the newAccount resource"*.
+
+Every URL of the server is kept as a `System.Uri` (`ACME/ACMEResources.cs:102`,
+`:176-177`, `:251`, `ACME/ACMEClient.cs:881`) and written out with
+`Uri.ToString()` (`ACME/ACMEClient.cs:855`, `:861`), which unescapes and
+normalizes: `%20` is sent as a space, `%7E` as `~`, and `/./` is dropped. A
+server that compares the strings - as section 6.4 says it SHOULD - answers
+unauthorized to every request of such a URL, and accountDoesNotExist to every
+request of such an account. `%2F`, a lower-case escape and a query survive.
+Fix: keep the strings as received (`Uri.OriginalString`, or a string beside
+the `Uri`) and send those.
+
+Tests: `WireFormTests.The_url_Is_The_Exact_String_The_Server_Handed_Out` (3 of
+7), `WireFormTests.The_kid_Is_The_Exact_Account_URL_The_Server_Handed_Out` (3 of 7).
+
+#### C-3
+
+RFC 8555, section 6.5: *"However, when retrying in response to a "badNonce"
+error, the client MUST use the nonce provided in the error response."*
+
+`ACME/ACMEClient.cs:888` retries, and the retry takes its nonce from the pool
+(`:962`, `ConcurrentQueue.TryDequeue`: the oldest), while the nonce of the
+badNonce answer was put at the end of it (`:874`, `:991`). With one nonce in
+the pool the two are the same; with more - which requests at once leave - the
+retry sends a nonce of before the badNonce, and against a server that
+rejected the nonces of before (a restart, a stale front end) uses up its
+three retries on them. Fix: take the Replay-Nonce of the badNonce answer for
+the retry, past the pool.
+
+Tests: `NonceTests.The_Retry_After_badNonce_Carries_The_Nonce_Of_The_badNonce`.
+
+#### C-4
+
+RFC 8555, section 6.5.1: *"The value of the Replay-Nonce header field MUST be
+an octet string encoded according to the base64url encoding ... Clients MUST
+ignore invalid Replay-Nonce values."*
+
+`ACME/ACMEClient.cs:968-972` (the HEAD of newNonce) and `:986-991` (every
+answer) take any value that is not empty: "not base64url!", "padded+/base64==",
+"a.b" are sent as the nonce of the next request, which the server refuses as
+badNonce. Fix: take only `[A-Za-z0-9_-]+`.
+
+Tests: `NonceTests.An_Invalid_Replay_Nonce_Of_A_POST_Is_Ignored` (3),
+`NonceTests.An_Invalid_Replay_Nonce_Of_newNonce_Is_Ignored` (2).
+
+#### C-5
+
+RFC 8555, section 7.3: *"Clients MUST NOT provide a "mailto" URL in the
+"contact" field that contains "hfields" [RFC6068] or more than one
+"addr-spec" in the "to" component."*
+
+`ACME/ACMEClient.cs:232-234` puts "mailto:" before an address without a colon
+and passes everything else as it is: "admin@acme.test?subject=renewal",
+"mailto:admin@acme.test?cc=boss@acme.test" and "admin@acme.test,boss@acme.test"
+are sent, and refused by the server. Fix: refuse a contact with "?" or a
+second address in the client, with an ArgumentException.
+
+Tests: `AccountTests.A_mailto_With_hfields_Or_Two_Addresses_Is_Not_Sent` (3).
+
+#### C-6
+
+RFC 9773, section 4.2: *"A RenewalInfo object in which the end timestamp
+equals or precedes the start timestamp is invalid. Servers MUST NOT serve
+such a response, and clients MUST treat one as though they failed to receive
+any response from the server"*.
+
+`ACME/ACMEClient.cs:493` refuses `end < start` and takes `end == start`; the
+manager then renews at that one instant instead of on its own schedule.
+Fix: `end <= start`.
+
+Tests: `RenewalInfoTests.A_Window_That_Ends_When_Or_Before_It_Starts_Is_No_Window(0)`,
+`CertificateManagerTests.A_Window_Of_No_Length_Leaves_The_Manager_s_Own_Schedule`.
+
+#### C-7
+
+draft-ietf-acme-profiles-03, section 4: *"The client SHOULD NOT request a
+profile name that is not advertised in the server's Directory metadata
+object."*
+
+`ACME/ACMEClient.cs:311-312` sends the profile it is given; the directory's
+profiles are read (`ACME/ACMEResources.cs:113`) and not looked at. A server
+without profiles, or with others, gets it all the same. Fix: refuse it before
+the order (or leave it out, with a word in the exception), unless the caller
+says it was agreed out of band.
+
+Tests: `OrderTests.A_Profile_The_Server_Does_Not_Advertise_Is_Not_Asked_For` (2).
+
+#### C-8
+
+RFC 8555, section 7.5.1: *"For challenges where the client can tell when the
+server has validated the challenge (e.g., by seeing an HTTP or DNS request
+from the server), the client SHOULD NOT begin polling until it has seen the
+validation request from the server."*
+
+`ACME/ACMEClient.cs:648` answers the challenges and `:655` polls at once,
+every `PollInterval`; Hermod's `HTTP01ChallengeResponder` serves the
+validation request and could tell. With a validation that comes 1.5 s later,
+the client has polled 15 times by then. Fix: a task on
+`IACMEChallengeResponder` that completes when the answer was fetched, awaited
+(with a timeout) before polling.
+
+Tests: `PollingTests.Polling_Begins_After_The_Validation_Request`.
+
+#### C-9
+
+RFC 9110, section 10.2.3: a Retry-After is *"either an HTTP-date or a number
+of seconds to delay after receiving the response"* - the date a time of the
+clock the client waits by.
+
+`ACME/ACMEClient.cs:1057` subtracts `DateTimeOffset.UtcNow`, and waits on
+`TimeProvider` (`:775`). With the system clock the two are one; with any other
+TimeProvider - the one the client's constructor takes for that purpose, a
+FakeTimeProvider of a test - a date is waited 0.1 s, or the whole poll
+timeout. Fix: `TimeProvider.GetUtcNow()`.
+
+Tests: `PollingTests.A_Retry_After_Date_Is_Read_By_The_Client_s_Clock`.
+
+#### C-10
+
+RFC 8555, section 6.1: *"This header field SHOULD include the name and
+version of the ACME software in addition to the name and version of the
+underlying HTTP client software."*
+
+`ACME/ACMEClient.cs:165`: "Hermod-ACME/1.0". Fix: a second product, as
+".NET/11.0", and the version of the assembly rather than "1.0".
+
+Tests: `WireFormTests.The_User_Agent_Names_The_ACME_Software_And_The_HTTP_Client`.
+
+#### C-11
+
+RFC 8555, section 6.1: *"ACME clients SHOULD send an Accept-Language header
+field in accordance with [RFC7231] to enable localization of error
+messages."*
+
+None is sent (`ACME/ACMEClient.cs:160-165` sets the User-Agent only). Fix: a
+default of "en" or the current UI culture, as a constructor parameter.
+
+Tests: `WireFormTests.An_Accept_Language_Is_Sent`.
+
+#### M-1
+
+RFC 9773, section 4.3.2: *"After an initial fetch of a certificate's
+RenewalInfo, clients MUST fetch it again as soon as possible after the time
+indicated in the Retry-After header"*, with *"reasonable limits"* - one
+minute to one day, the RFC suggests.
+
+`ACME/ACMECertificateManager.cs:472` waits until the renewal is due or
+`CheckInterval` (six hours) has passed, whichever is earlier; the RetryAfter
+the client reads (`ACMERenewalInfo.RetryAfter`) is never used. A CA that asks
+for a look every hour - to move the window of a certificate it is about to
+revoke - is asked every six. Fix: wait `min(due - now, clamp(RetryAfter, 1
+minute, 1 day))`, and `CheckInterval` only where there is no RenewalInfo.
+
+Tests: `CertificateManagerTests.The_Window_Is_Asked_For_Again_After_Its_Retry_After`.
+
+#### M-2
+
+RFC 9773, section 4.3: *"Clients SHOULD fetch a certificate's RenewalInfo
+immediately after issuance."*
+
+`ACME/ACMECertificateManager.cs:468-470` waits `CheckInterval` after a renewal
+of its loop, and asks for the new certificate's window six hours later
+(only the renewal of `StartAsync` is followed by a look at once, by the loop's
+first round). Fix: go round the loop at once after a renewal.
+
+Tests: `CertificateManagerTests.The_Window_Of_A_New_Certificate_Is_Asked_For_At_Once`.
+
+#### M-3
+
+RFC 9773, section 4.2: *"explanationURL (string, optional): A URL pointing to
+a page that may explain why the suggested renewal window has its current
+value ... Clients SHOULD provide this URL to their operator, if present."*
+
+The client reads it (`ACMERenewalInfo.ExplanationURL`); the manager
+(`ACME/ACMECertificateManager.cs:300-313`) keeps the RenewalInfo in a private
+field and says it neither to its logger nor through a property or an event.
+Fix: log it when the window changes, and expose the RenewalInfo.
+
+Tests: `CertificateManagerTests.The_explanationURL_Reaches_The_Operator`.
+
 ## Closed
 
 None yet.
@@ -277,3 +507,14 @@ Where RFC 8555 does not settle a question, the reading the suite takes, and why.
   joined, as Let's Encrypt does - Level SHOULD.
 - **Non-canonical address forms** (RFC 8738, section 3): refused, or kept as
   the address the text says in that form; never read as another (S-9).
+- **How often a client retries a badNonce** (RFC 8555, section 6.5, sets no
+  number): a few times and then the server's error - a client that retries
+  without end hangs its caller. Hermod retries three times.
+- **PEM as servers write it** (RFC 7468): CRLF, empty lines and blanks between
+  the blocks, the root sent along, the chain root first - all taken, Level
+  SHOULD; Hermod finds the leaf by its key.
+- **A token outside the base64url alphabet** (RFC 8555, section 8.3, a MUST
+  of the server): what a client does with one is not said; the suite asks
+  only that the answer is served at no other path than the token's own.
+- **"Provide to their operator"** (RFC 9773, section 4.2): through the
+  logger, a property or an event - whatever an operator can read (M-3).

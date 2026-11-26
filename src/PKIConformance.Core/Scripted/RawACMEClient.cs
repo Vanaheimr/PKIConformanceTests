@@ -202,6 +202,26 @@ public sealed class RawACMEClient : IDisposable
 
     }
 
+    /// <summary>
+    /// A client of the directory at the URL - of the bench's own server, say -
+    /// its directory read.
+    /// </summary>
+    public static async Task<RawACMEClient> ConnectAsync(HttpClient  HTTP,
+                                                         Uri         DirectoryURL)
+    {
+
+        var client     = new RawACMEClient(HTTP, DirectoryURL);
+        var directory  = await client.SendAsync(HttpMethod.Get, DirectoryURL.ToString());
+
+        if (directory.Status != 200 || directory.Object is null)
+            throw new InvalidOperationException($"The directory at {DirectoryURL} could not be read: {directory}");
+
+        client.Directory = directory.Object;
+
+        return client;
+
+    }
+
     #endregion
 
 

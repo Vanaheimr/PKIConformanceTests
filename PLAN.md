@@ -104,6 +104,33 @@ Status legend: ✅ done · 🔶 in progress · ⬜ planned · 📋 optional / do
   needs no resolution. `BenchNameServerTests` proves the name server answers
   what dns-01 needs, so that a red dns-01 test is red at the server.
 
+### Learned in phase 3
+
+- **The client's findings are of exactness and of distrust.** Hermod's client
+  does every flow right, against a server that is strict where the RFC is;
+  what it gets wrong is taking the server's strings as `System.Uri` and
+  writing them out re-encoded (C-2), taking a nonce from the pool where the
+  RFC names the one to take (C-3), and believing what a server sends: a
+  Replay-Nonce of any shape (C-4), a chain with a private key in it (C-1, the
+  key replacement attack of RFC 8555, section 11.4 - into fullchain.pem by
+  the manager).
+- **`CertificateRequest.LoadSigningRequest` reads no extensions** of a CSR
+  unless told (`UnsafeLoadCertificateExtensions`); the bench first found no
+  names in any CSR, and refused all of them as badCSR. A bench is tested
+  against a client of the suite's own first: `BenchACMEServerTests`.
+- **A clock that moves only when it is waited on stands still at a wait of
+  less than a millisecond**: .NET's `Task.Delay` returns from one at once,
+  without a timer. Hermod's manager, due in a few microseconds, then looks at
+  the window 25 000 times in 15 s - as it would on a `FakeTimeProvider`. With
+  the system clock time passes anyway, so it is no finding; `BenchClock`
+  moves a millisecond at every reading, as a real one does.
+- **The bench**: `ScriptedACMEServer` (RFC 8555 strict: Content-Type, the
+  flattened JWS, nonces, "url" by string, signatures by RawACME; http-01
+  asked at the client's port with the name as the Host, dns-01 read from a
+  zone the client's responder writes; issuance by `BenchCA`, .NET alone;
+  every request kept, every answer replaceable), `BenchClock` (every wait
+  written down, none taken).
+
 ---
 
 ## 1. Guiding principles
@@ -329,7 +356,16 @@ NXDOMAIN vs. empty answer, timeouts. The *policy* questions (redirect ports,
 private addresses) go into the "Interpretations" section of `FINDINGS.md`,
 because RFC 8555 does not settle them.
 
-### 4.4 Client (`PKIConformance.ACME.Client.Tests`) — Hermod → `ScriptedACMEServer` ⬜
+### 4.4 Client (`PKIConformance.ACME.Client.Tests`) — Hermod → `ScriptedACMEServer` ✅ 166
+
+*Phase 3, 2026-11-26: 161 tests of Hermod's client and certificate manager,
+and 5 of the bench itself (`BenchACMEServerTests`, by RawACME's client); 43
+red, the same on both legs: 31 at the 14 findings of round 2, C-1 to C-11
+and M-1 to M-3 ([FINDINGS.md](FINDINGS.md)), tagged `KnownIssue`, and 12
+trackers, one for each client ToDo T-C1 to T-C12, tagged `ToDo`. On Windows
+the test of the key file's mode skips (POSIX modes).* Not covered yet: the
+manager's files against what certbot writes (needs the reference run of
+phase 5), an order of an unknown status, several challenges of one type.
 
 | Cluster | Scenarios |
 |---|---|
@@ -429,7 +465,8 @@ build/
 src/
   PKIConformance.Core/
     RawACME/                        JWS, JWK, thumbprint, EAB, key change, CSR reader, ARI id
-    Scripted/                       RawACMEClient, ScriptedChallengeHost, ScriptedDNSServer, ScriptedACMEServer
+    Scripted/                       RawACMEClient, ScriptedChallengeHost, ScriptedDNSServer, ScriptedACMEServer,
+                                    BenchCA (issues with .NET alone), BenchClock (a TimeProvider that writes every wait down)
     Fixtures/                       PKIACMEFixture (in-process PKI), BindFixture, PebbleFixture,
                                     StepCAFixture, BoulderFixture, CertbotPeer, LegoPeer,
                                     AcmeShPeer, RecordingProxy
@@ -502,7 +539,7 @@ enrolment protocols (EST, RFC 7030) later, without renaming anything.
 | M | *In Hermod and the PKI, not here:* the ACME server moves into Hermod with an issuer interface; the PKI plugs in its CA; T-S5 on the way. Here: `HermodACMEServer` as a second `IACMEServerUnderTest`, the pins advanced | the server suites green against both implementations |
 | 1 ✅ | *Done 2026-11-26: 87 tests, no finding.* `RawACME` (`src/PKIConformance.Core/RawACME`: base64url, JWK, thumbprint, JWS, key authorization, EAB, key change, ARI id) + Codec tests | all RFC vectors green; Hermod ↔ RawACME ↔ PKI sign/verify in every direction |
 | 2 ✅ | *Done 2026-11-26: 224 server and 40 validation tests, round 1 of the findings: S-1 to S-13 and V-1, 14 in all.* `RawACMEClient`, `ScriptedChallengeHost`, `ScriptedDNSServer`, `RawCSR`; Server + Validation conformance | ~150 tests; first findings round for the PKI |
-| 3 | `ScriptedACMEServer` + Client conformance | ~80 tests; first findings round for Hermod |
+| 3 ✅ | *Done 2026-11-26: 166 client tests, round 2 of the findings: C-1 to C-11 and M-1 to M-3, 14 in all; a tracker for every client ToDo.* `ScriptedACMEServer`, `BenchCA`, `BenchClock`; Client conformance | ~80 tests; first findings round for Hermod |
 | 4 | Interop A: certbot, acme.sh, dehydrated, uacme (Debian) and **lego** (pinned upstream v5) → PKI; BIND/RFC 2136 | matrix §4.5 filled except the ARI cells of certbot |
 | 5 | Interop B: Hermod → Pebble (+ nonce storm), step-ca; certbot-vs-Pebble reference layout; Boulder in Docker | matrix §4.6 filled |
 | 6 | Upstream tier with pins; `InteropReport` → `docs/INTEROP-MATRIX.md`; nightly lanes incl. `against-submodule-masters` | matrix generated, nightly green |
