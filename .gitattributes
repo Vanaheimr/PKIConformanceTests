@@ -1,0 +1,4 @@
+# Shell scripts have to reach WSL with LF endings. With core.autocrlf=true a
+# script whose first directive is "set -e<CR>" is rejected by dash as an
+# illegal option - the lesson DNSConformanceTests learned with resign.sh.
+*.sh text eol=lf

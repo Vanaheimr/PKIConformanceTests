@@ -1,0 +1,12 @@
+# Read by every "dotnet build" and "dotnet test" started in this tree.
+#
+# The PKI embeds a web interface that npm and webpack build. Nothing here
+# looks at it, and neither node nor npm is on a CI runner. As a global
+# property this reaches every project of the build alike; set per
+# ProjectReference (AdditionalProperties) it would reach the PKI and,
+# inherited, Hermod and the rest as well - built twice then, once with it
+# and once without, into the same obj/.
+#
+# Not a Directory.Build.props: the PKI, Norn, Urdr and WWCP_* do not import
+# one from above, and Hermod and Styx would take everything else it said too.
+-p:SkipFrontendBuild=true

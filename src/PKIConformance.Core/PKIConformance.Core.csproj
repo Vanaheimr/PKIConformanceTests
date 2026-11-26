@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Shared infrastructure for the ACME (RFC 8555) conformance and interoperability test suite of Hermod's ACME client and the PKI's ACME server: the servers under test behind one interface, the WSL bridge to the peers (certbot, lego, acme.sh, Pebble, ...) and capability probing.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- NUnit only for the Assert.Ignore-based capability gating helpers. -->
+    <PackageReference Include="NUnit" Version="5.0.0" />
+    <PackageReference Include="NUnit.Analyzers" Version="4.15.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\libs\Styx\Styx\Styx.csproj" />
+    <ProjectReference Include="..\..\libs\Hermod\Hermod\Hermod.csproj" />
+    <ProjectReference Include="..\..\libs\PKI\PKI\PKI.csproj" />
+    <!-- TestPorts: a PKI started on ports found free, and found anew when one
+         was taken in between - what PKITests starts its PKIs with. -->
+    <ProjectReference Include="..\..\libs\WWCP_Node\WWCP_Node_TestKit\WWCP_Node_TestKit.csproj" />
+  </ItemGroup>
+
+</Project>

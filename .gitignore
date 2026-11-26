@@ -1,0 +1,16 @@
+bin/
+obj/
+TestResults/
+*.user
+
+# The --results-directory of every test run: .trx files, peer logs and the
+# exchanges the recording proxy captured. Uploaded by CI, never committed.
+artifacts/
+
+# What build/test-in-wsl.sh builds into when the same checkout is built on
+# Linux as well: kept apart from Windows' bin/ and obj/ (see that script).
+build/linux/
+
+# Visual Studio's per-solution state: window layout, the browse database,
+# and the file-watcher cache. Machine-local, and large.
+.vs/

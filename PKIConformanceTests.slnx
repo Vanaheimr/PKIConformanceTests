@@ -1,0 +1,34 @@
+<Solution>
+  <Folder Name="/conformance/">
+    <Project Path="conformance/PKIConformance.ACME.Server.Tests/PKIConformance.ACME.Server.Tests.csproj" />
+  </Folder>
+  <Folder Name="/interop/">
+    <Project Path="interop/PKIInterop.ACMEClients.Tests/PKIInterop.ACMEClients.Tests.csproj" />
+  </Folder>
+  <Folder Name="/libs/" />
+  <Folder Name="/libs/Hermod/">
+    <Project Path="libs/Hermod/Hermod/Hermod.csproj" />
+  </Folder>
+  <Folder Name="/libs/Norn/">
+    <Project Path="libs/Norn/Norn/Norn.csproj" />
+  </Folder>
+  <Folder Name="/libs/PKI/">
+    <Project Path="libs/PKI/PKI/PKI.csproj" />
+  </Folder>
+  <Folder Name="/libs/Styx/">
+    <Project Path="libs/Styx/Styx/Styx.csproj" />
+  </Folder>
+  <Folder Name="/libs/Urdr/">
+    <Project Path="libs/Urdr/Urdr/Urdr.csproj" />
+  </Folder>
+  <Folder Name="/libs/WWCP_Core/">
+    <Project Path="libs/WWCP_Core/WWCP_CoreData/WWCP_CoreData.csproj" />
+  </Folder>
+  <Folder Name="/libs/WWCP_Node/">
+    <Project Path="libs/WWCP_Node/WWCP_Node/WWCP_Node.csproj" />
+    <Project Path="libs/WWCP_Node/WWCP_Node_TestKit/WWCP_Node_TestKit.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/PKIConformance.Core/PKIConformance.Core.csproj" />
+  </Folder>
+</Solution>

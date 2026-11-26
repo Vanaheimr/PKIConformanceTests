@@ -1,0 +1,76 @@
+name: Nightly
+
+on:
+  schedule:
+    # Off the hour on purpose: on the hour is when everybody's cron runs.
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  peers:
+    # The interop suite natively on Debian 13: the peers installed by the same
+    # script a developer runs inside WSL, the server under test in the same
+    # process as the tests, one loopback between them and no firewall.
+    #
+    # A skip is red here. On a developer machine "lego is not installed" is a
+    # reason to skip; on a runner that has just installed it, it is a broken
+    # setup that would otherwise read as green.
+    name: peers (debian-13-container)
+    runs-on: ubuntu-latest
+    container: debian:13
+    steps:
+      - name: Install git
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends ca-certificates git
+          git config --system http.version HTTP/1.1
+
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install .NET prerequisites
+        run: apt-get install -y --no-install-recommends curl libicu76 libssl3t64 libstdc++6 tzdata
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '11.0.x'
+
+      # Debian's packages and the pinned upstream lego (build/peers/pins.env).
+      - name: Install the peers
+        run: sh build/peers/setup-wsl.sh
+
+      - name: Build
+        run: dotnet build PKIConformanceTests.slnx --configuration Release
+
+      - name: Test (peers)
+        timeout-minutes: 60
+        run: >
+          dotnet test PKIConformanceTests.slnx --configuration Release --no-build
+          --filter "TestCategory=WSL&TestCategory!=KnownIssue&TestCategory!=ToDo"
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFilePrefix=peers"
+          --results-directory artifacts
+
+      - name: No test may have skipped
+        shell: bash
+        run: |
+          skipped=$(cat artifacts/peers*.trx | grep -o 'outcome="NotExecuted"' | wc -l)
+          echo "skipped: $skipped"
+          test "$skipped" -eq 0
+
+      # What is known to be red: a KnownIssue or a ToDo that turns green here is
+      # one to close. Informational, never red.
+      - name: Test (KnownIssue and ToDo)
+        continue-on-error: true
+        run: >
+          dotnet test PKIConformanceTests.slnx --configuration Release --no-build
+          --filter "TestCategory=KnownIssue|TestCategory=ToDo"
+          --logger "trx;LogFilePrefix=open"
+          --results-directory artifacts
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-peers
+          path: artifacts/*.trx

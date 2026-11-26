@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  # Manual runs from the Actions tab ("Run workflow"), same as nightly.yml.
+  workflow_dispatch:
+
+concurrency:
+  # Pull requests: one run per branch, newest wins. Pushes: one run per commit,
+  # and nothing cancels anything - a commit with no verdict is a hole nobody
+  # comes back to fill (the reasoning of DNSConformanceTests' ci.yml).
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  offline-suite:
+    # The same two legs as the siblings: a conformance result that only holds
+    # on one platform is worth knowing about. fail-fast is off, because "red on
+    # exactly one platform" is the most informative thing this matrix can say.
+    #
+    # `leg` names the run by what it is: the Linux leg runs on ubuntu-latest
+    # but IS Debian 13.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            leg: windows-latest
+          - os: ubuntu-latest
+            container: debian:13
+            leg: debian-13-container
+    name: ${{ matrix.leg }}
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    steps:
+      # Before the checkout: the bare debian:13 image ships no git, and without
+      # it actions/checkout downloads a tarball, which cannot carry submodules.
+      # HTTP/1.1, because Debian's git over HTTP/2 to github.com once dropped a
+      # submodule fetch with "Error in the HTTP2 framing layer" in
+      # NTSConformanceTests, and the submodule update is not retried.
+      - name: Install git (Debian container)
+        if: runner.os == 'Linux'
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends ca-certificates git
+          git config --system http.version HTTP/1.1
+
+      # The gate tests the pinned set of submodules - what a fresh clone builds.
+      # Against Hermod's and the PKI's master is the nightly's question.
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      # curl for the dotnet-install script, ICU and tzdata for globalization,
+      # OpenSSL for crypto. Package names are Debian 13 (trixie).
+      - name: Install .NET prerequisites (Debian container)
+        if: runner.os == 'Linux'
+        run: apt-get install -y --no-install-recommends curl libicu76 libssl3t64 libstdc++6 tzdata
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '11.0.x'
+
+      # Directory.Build.rsp switches off the PKI's npm/webpack frontend build:
+      # there is no node here, and nothing tested looks at the web interface.
+      - name: Build
+        run: dotnet build PKIConformanceTests.slnx --configuration Release
+
+      # Everything that needs nothing but loopback sockets. A red here means a
+      # conformance result changed, never that a peer was missing - which is
+      # what makes it usable as a gate. KnownIssue and ToDo are red by design
+      # until the fix or the feature lands; the nightly reports them.
+      - name: Test (offline)
+        timeout-minutes: 30
+        run: >
+          dotnet test PKIConformanceTests.slnx --configuration Release --no-build
+          --filter "TestCategory!=Online&TestCategory!=WSL&TestCategory!=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFilePrefix=offline"
+          --results-directory artifacts
+
+      # !cancelled() rather than success(): a red run is when these files
+      # matter most.
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.leg }}
+          path: artifacts/*.trx
