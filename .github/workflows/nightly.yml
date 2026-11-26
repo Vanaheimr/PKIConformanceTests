@@ -45,7 +45,7 @@ jobs:
       - name: Test (peers)
         timeout-minutes: 60
         run: >
-          dotnet test PKIConformanceTests.slnx --configuration Release --no-build
+          sh build/bench-namespace.sh dotnet test PKIConformanceTests.slnx --configuration Release --no-build
           --filter "TestCategory=WSL&TestCategory!=KnownIssue&TestCategory!=ToDo"
           --logger "console;verbosity=normal"
           --logger "trx;LogFilePrefix=peers"
@@ -63,7 +63,7 @@ jobs:
       - name: Test (KnownIssue and ToDo)
         continue-on-error: true
         run: >
-          dotnet test PKIConformanceTests.slnx --configuration Release --no-build
+          sh build/bench-namespace.sh dotnet test PKIConformanceTests.slnx --configuration Release --no-build
           --filter "TestCategory=KnownIssue|TestCategory=ToDo"
           --logger "trx;LogFilePrefix=open"
           --results-directory artifacts

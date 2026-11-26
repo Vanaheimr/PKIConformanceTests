@@ -52,6 +52,14 @@ the Linux file system (results land in `artifacts/` here as usual):
 wsl sh build/test-in-wsl.sh -c Release --filter "TestCategory=WSL"
 ```
 
+The run happens in a user and mount namespace of its own
+(`build/bench-namespace.sh`, no root needed): there the names of the bench -
+`acme.test`, `www.acme.test`, `n01.acme.test` to `n16.acme.test` - resolve to
+the loopback, which the PKI needs for http-01 of a name until it resolves
+through Hermod's DNSClient (T-S5), and uacme, which takes no CA file, finds
+the bench's root in the system's bundle. The system's `/etc/hosts` and CA
+bundle are never touched.
+
 ## Test categories
 
 | Category | Needs | Run with |

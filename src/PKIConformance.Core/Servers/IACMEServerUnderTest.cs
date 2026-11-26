@@ -55,4 +55,51 @@ public interface IACMEServerUnderTest : IAsyncDisposable
     /// </summary>
     Task<(String KeyId, Byte[] MACKey)> NewExternalAccountKeyAsync();
 
+    /// <summary>
+    /// The accounts as the server keeps them - what an interop test compares
+    /// a peer's view with: the operator's side of the same account.
+    /// </summary>
+    IReadOnlyList<ServerAccount> Accounts();
+
+    /// <summary>
+    /// The certificates the server issued over ACME, and whether it holds
+    /// them revoked.
+    /// </summary>
+    IReadOnlyList<ServerIssued> Issued();
+
+    /// <summary>
+    /// The newest CRL of the CA that issues, DER - or null where there is none.
+    /// </summary>
+    Byte[]? CRL();
+
 }
+
+/// <summary>
+/// An account as the server under test keeps it.
+/// </summary>
+/// <param name="Id">The server's identifier of it.</param>
+/// <param name="Status">"valid", "deactivated" or "revoked".</param>
+/// <param name="Contacts">Its contact URLs.</param>
+/// <param name="KeyType">The "kty" of its key: "EC" or "RSA".</param>
+/// <param name="KeyDetail">The curve of an EC key, the modulus size in bits of an RSA key.</param>
+/// <param name="ExternalAccount">The key identifier of its external account binding, if any.</param>
+public sealed record ServerAccount(String                 Id,
+                                   String                 Status,
+                                   IReadOnlyList<String>  Contacts,
+                                   String                 KeyType,
+                                   String?                KeyDetail,
+                                   String?                ExternalAccount);
+
+/// <summary>
+/// A certificate the server under test issued over ACME.
+/// </summary>
+/// <param name="DER">The certificate.</param>
+/// <param name="AccountId">The account it was issued to.</param>
+/// <param name="Replaces">The ARI identifier of the certificate it replaces (RFC 9773), if any.</param>
+/// <param name="Revoked">Whether the server holds it revoked.</param>
+/// <param name="Reason">The reason code of its revocation (RFC 5280, section 5.3.1), if revoked.</param>
+public sealed record ServerIssued(Byte[]   DER,
+                                  String   AccountId,
+                                  String?  Replaces,
+                                  Boolean  Revoked,
+                                  Int32?   Reason);

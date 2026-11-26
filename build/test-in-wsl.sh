@@ -40,4 +40,6 @@ export GIT_CONFIG_COUNT=1
 export GIT_CONFIG_KEY_0=core.autocrlf
 export GIT_CONFIG_VALUE_0=true
 
-exec dotnet test PKIConformanceTests.slnx --results-directory "$src/artifacts" "$@"
+# The names of the bench resolve to the loopback in this run alone
+# (build/bench-namespace.sh): the PKI resolves http-01 by the system (T-S5).
+exec sh "$tree/build/bench-namespace.sh" dotnet test PKIConformanceTests.slnx --results-directory "$src/artifacts" "$@"

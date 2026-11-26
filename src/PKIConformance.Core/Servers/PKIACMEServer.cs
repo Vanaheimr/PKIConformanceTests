@@ -37,6 +37,7 @@ public sealed class PKIACMEServer : IACMEServerUnderTest
 
     private readonly String    directory;
     private readonly PKINode   pki;
+    private readonly String    issuerId;
 
     #endregion
 
@@ -72,6 +73,7 @@ public sealed class PKIACMEServer : IACMEServerUnderTest
                           PKINode   PKI,
                           BenchTLS  TLS,
                           String    IssuingRootPEM,
+                          String    IssuerId,
                           String?   WslHost)
     {
 
@@ -79,6 +81,7 @@ public sealed class PKIACMEServer : IACMEServerUnderTest
         this.pki             = PKI;
         this.TLS             = TLS;
         this.IssuingRootPEM  = IssuingRootPEM;
+        this.issuerId        = IssuerId;
 
         var port             = PKI.HTTPPort.ToUInt16();
 
@@ -143,6 +146,7 @@ public sealed class PKIACMEServer : IACMEServerUnderTest
                                      pki,
                                      tls,
                                      pki.Store.CertificatePEM(root.Id) ?? throw new InvalidOperationException("The root CA of the test has no PEM."),
+                                     sub.Id,
                                      wslHost);
 
         }
@@ -224,6 +228,54 @@ public sealed class PKIACMEServer : IACMEServerUnderTest
         => pki.ACMEState.TryNewExternalAccountKey("PKIConformance", "pkiconformance", out var key, out var error)
                ? Task.FromResult((key.KeyId, key.MACKey))
                : throw new InvalidOperationException($"The PKI made no key of an external account binding: {error}");
+
+    #endregion
+
+    #region Accounts() / Issued() / CRL()
+
+    /// <inheritdoc/>
+    public IReadOnlyList<ServerAccount> Accounts()
+
+        => [ .. pki.ACMEState.Accounts().Select(account => new ServerAccount(
+                                                               account.Id,
+                                                               account.Status,
+                                                               [ .. account.Contacts ],
+                                                               account.JWK.Value<String>("kty") ?? "?",
+                                                               account.JWK.Value<String>("kty") == "RSA"
+                                                                   ? (Base64UrlLength(account.JWK.Value<String>("n")) * 8).ToString()
+                                                                   : account.JWK.Value<String>("crv"),
+                                                               account.ExternalAccount)) ];
+
+    /// <inheritdoc/>
+    public IReadOnlyList<ServerIssued> Issued()
+
+        => [ .. pki.ACMEState.Accounts().
+                              SelectMany(account => pki.ACMEState.IssuedFor(account.Id)).
+                              Select(issued => {
+                                  using var certificate = pki.Store.Load(issued.CertificateId);
+                                  var revocation        = pki.Store.RevocationOf(issued.CertificateId);
+                                  // The PKI keeps what an order replaces by its own identifier of
+                                  // the certificate; the interface speaks RFC 9773's.
+                                  using var replaced    = issued.Replaces is not null ? pki.Store.Load(issued.Replaces) : null;
+                                  return new ServerIssued(certificate?.RawData ?? [],
+                                                          issued.AccountId,
+                                                          replaced is not null ? RawACME.RawARI.CertificateId(replaced.RawData) : issued.Replaces,
+                                                          revocation is not null,
+                                                          revocation is not null ? (Int32) revocation.Reason : null);
+                              }) ];
+
+    /// <inheritdoc/>
+    public Byte[]? CRL()
+        => pki.Store.CRL(issuerId);
+
+    private static Int32 Base64UrlLength(String? Text)
+    {
+        if (Text is null)
+            return 0;
+        var octets = Text.Length * 3 / 4;
+        // An RSA modulus is sent without leading zero octets (RFC 7518, section 6.3.1.1).
+        return octets;
+    }
 
     #endregion
 

@@ -6,7 +6,8 @@
 #   wsl -u root sh build/peers/setup-wsl.sh            install what is missing
 #   wsl sh build/peers/setup-wsl.sh --check            only say what is there
 #
-# From Debian: certbot (+ the RFC 2136 plugin), acme.sh, Pebble and its
+# From Debian: certbot (+ the RFC 2136 plugin), acme.sh (+ socat, its web
+# server), Pebble and its
 # challenge test server, BIND for dns-01 by RFC 2136, dehydrated, uacme,
 # openssl and curl. From upstream, pinned in pins.env: lego, whose Debian
 # package is three years behind.
@@ -21,12 +22,13 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 . "$here/pins.env"
 
-APT_PACKAGES="curl ca-certificates openssl rsync certbot python3-certbot-dns-rfc2136 acme.sh pebble bind9 bind9-dnsutils dehydrated uacme"
+APT_PACKAGES="curl ca-certificates openssl rsync socat certbot python3-certbot-dns-rfc2136 acme.sh pebble bind9 bind9-dnsutils dehydrated uacme"
 
 version_of() {
     case "$1" in
         lego)                 lego --version 2>/dev/null | head -n1 ;;
-        certbot)              certbot --version 2>&1 | head -n1 ;;
+        # As the suite starts it: /usr/local off Python's path (PLAN.md, "Learned in phase 0").
+        certbot)              python3 -c 'import sys; sys.path[:] = [p for p in sys.path if not p.startswith("/usr/local/")]; import certbot; print("certbot", certbot.__version__)' 2>&1 | tail -n1 ;;
         acme.sh)              acme.sh --version 2>/dev/null | tail -n1 ;;
         pebble)               dpkg-query -W -f='pebble ${Version}' pebble 2>/dev/null ;;
         pebble-challtestsrv)  dpkg-query -W -f='pebble-challtestsrv ${Version}' pebble 2>/dev/null ;;
@@ -37,13 +39,16 @@ version_of() {
         openssl)              openssl version 2>/dev/null ;;
         curl)                 curl --version 2>/dev/null | head -n1 ;;
         rsync)                rsync --version 2>/dev/null | head -n1 ;;
+        socat)                socat -V 2>/dev/null | grep -m1 "socat version" ;;
+        dig)                  dig -v 2>&1 | head -n1 ;;
+        unshare)              unshare --version 2>/dev/null | head -n1 ;;
         dotnet)               dotnet --version 2>/dev/null ;;
     esac
 }
 
 check() {
     missing=0
-    for tool in lego certbot acme.sh pebble pebble-challtestsrv named nsupdate dehydrated uacme openssl curl rsync dotnet; do
+    for tool in lego certbot acme.sh socat pebble pebble-challtestsrv named nsupdate dig dehydrated uacme openssl curl rsync unshare dotnet; do
         if command -v "$tool" >/dev/null 2>&1; then
             printf '  %-20s %s\n' "$tool" "$(version_of "$tool")"
         else

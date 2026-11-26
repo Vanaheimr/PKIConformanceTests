@@ -74,6 +74,53 @@ public static class TestEnvironment
 
     #endregion
 
+    #region Bench names / system trust
+
+    /// <summary>
+    /// Skip where the names of the bench (<see cref="BenchNames"/>) do not
+    /// resolve to the loopback - a run outside build/bench-namespace.sh.
+    /// </summary>
+    public static void RequireBenchNames()
+    {
+        if (!BenchNames.Resolve)
+            Assert.Ignore("The names of the bench (www.acme.test, ...) do not resolve to the loopback - skipping. " +
+                          "The PKI resolves http-01 by the system until T-S5: run inside build/bench-namespace.sh, as build/test-in-wsl.sh does.");
+    }
+
+    /// <summary>
+    /// Have the system's CA bundle trust the given root as well - for a peer
+    /// that takes no CA file of its own (uacme). Done by laying a bundle with
+    /// the root over /etc/ssl/certs/ca-certificates.crt, in the namespace of
+    /// build/bench-namespace.sh alone (or in a CI container): the system's
+    /// bundle is never touched. Skips where that cannot be done.
+    /// </summary>
+    public static void TrustSystemWide(String RootFile)
+    {
+
+        const String bundle = "/etc/ssl/certs/ca-certificates.crt";
+
+        if (Wsl.UsesWslBridge || Environment.GetEnvironmentVariable("PKICONFORMANCE_BENCH_HOSTS") is null)
+            Assert.Ignore("The system's CA bundle is laid over in the run of build/bench-namespace.sh only - skipping.");
+
+        // "0 1000 1" in a namespace of build/bench-namespace.sh; "0 0 4294967295" outside of any.
+        var map         = File.Exists("/proc/self/uid_map") ? File.ReadAllText("/proc/self/uid_map").Split((Char[]) [ ' ', '\t', '\n' ], StringSplitOptions.RemoveEmptyEntries) : [];
+        var inNamespace = map is [ "0", var outside, .. ] && outside != "0";
+
+        if (!inNamespace && Environment.GetEnvironmentVariable("CI") is null)
+            Assert.Ignore("Not in a user namespace of its own, and no CI container: the system's CA bundle is not laid over - skipping.");
+
+        var path = Path.Combine(Path.GetTempPath(), $"pkiconformance-bundle-{Guid.NewGuid():N}.crt");
+        File.WriteAllText(path, File.ReadAllText(bundle) + "\n" + File.ReadAllText(RootFile) + "\n");
+
+        var mounted = Wsl.Run($"mount --bind '{path}' '{bundle}'", TimeSpan.FromSeconds(15));
+
+        if (!mounted.Success)
+            Assert.Ignore($"The system's CA bundle could not be laid over - skipping: {mounted}");
+
+    }
+
+    #endregion
+
     #region Docker
 
     private static readonly Lazy<Boolean> hasDocker = new(() => {

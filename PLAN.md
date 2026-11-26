@@ -160,8 +160,10 @@ Status legend: ✅ done · 🔶 in progress · ⬜ planned · 📋 optional / do
 6. **Far sides are pinned and named.** Every interop result records the exact
    version of the peer (banner, package version, or SHA-256 of the binary).
 7. **A peer that lacks a feature is grey, not red.** certbot has no key
-   rollover, acme.sh no profiles in older versions: such cells are
-   `Assert.Ignore("<peer> <version> has no …")`, never a failure of the PKI.
+   rollover, acme.sh no profiles in older versions: such a cell is no
+   failure of the PKI. It has no test at all - the peer's test class says in
+   its remarks what its version lacks, and the matrix shows "—" - so that
+   an interop lane stays one in which any skip is red (principle 3).
 
 ---
 

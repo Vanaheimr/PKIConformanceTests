@@ -190,6 +190,26 @@ public sealed class ScriptedChallengeHost : IAsyncDisposable
         => routes[ChallengePath(Token)] = Answer;
 
     /// <summary>
+    /// Serve /.well-known/acme-challenge/ from a directory - the webroot a
+    /// client writes its answers into as files: certbot's and lego's
+    /// "webroot", the WELLKNOWN of dehydrated, the CHALLENGE_PATH of uacme.
+    /// </summary>
+    /// <param name="Directory">The directory of the answers: a file of the name of each token.</param>
+    public void ServeDirectory(String Directory)
+
+        => Fallback = request => {
+                          var token = request.Path.StartsWith("/.well-known/acme-challenge/", StringComparison.Ordinal)
+                                          ? request.Path["/.well-known/acme-challenge/".Length..]
+                                          : null;
+                          var file  = token is not null && token.Length > 0 && !token.Contains('/') && !token.Contains("..")
+                                          ? System.IO.Path.Combine(Directory, token)
+                                          : null;
+                          return file is not null && File.Exists(file)
+                                     ? HostAnswer.Text(File.ReadAllText(file))
+                                     : HostAnswer.NotFound;
+                      };
+
+    /// <summary>
     /// The requests of a path.
     /// </summary>
     public IReadOnlyList<HostRequest> RequestsOf(String Path)
