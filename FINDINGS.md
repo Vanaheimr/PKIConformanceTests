@@ -23,7 +23,235 @@ keeps the `Finding` property. Each entry: the RFC sentence, the mechanism with
 
 ## Open
 
-None yet.
+### Round 1 - the PKI's server and validator (phase 2, 2026-11-26, PKI `ba8324a9`, Hermod `0a93a6fb`)
+
+Paths below are relative to `libs/PKI/PKI/`.
+
+| ID | Level | In short |
+|---|---|---|
+| [V-1](#v-1) | MUST | dns-01 never validates: `_acme-challenge` is no host name to Hermod's `DomainName` |
+| [S-1](#s-1) | MUST | base64url with padding is taken, in the JWS, the CSR and the certificate of a revocation |
+| [S-2](#s-2) | MUST | "crit" is not read: the Unencoded Payload Option and unknown critical parameters are taken |
+| [S-3](#s-3) | MUST | a "jwk" whose point is off its curve is a 500 serverInternal, not 400 badPublicKey - on Windows |
+| [S-4](#s-4) | MUST | a GET of a POST-as-GET resource is 405, but no problem document of the type "malformed" |
+| [S-5](#s-5) | MUST | a POST-as-GET of the directory and of newNonce is refused |
+| [S-6](#s-6) | MUST | the account object of an external account binding does not have the binding |
+| [S-7](#s-7) | MUST | a CSR of another account's key is signed |
+| [S-8](#s-8) | MUST | an "xn--" label is not checked to be an A-label |
+| [S-9](#s-9) | MUST | an address with a leading zero is read as octal: "010.0.0.1" becomes 8.0.0.1 |
+| [S-10](#s-10) | MUST | an order of RFC 9773 does not say what it "replaces" |
+| [S-11](#s-11) | SHOULD | "replaces" of a certificate sharing no name, or replaced by a pending order, is taken |
+| [S-12](#s-12) | MUST | the "profiles" of the directory are descriptions, not URLs (draft-ietf-acme-profiles-03) |
+| [S-13](#s-13) | SHOULD | an order without a profile, where there is no default, is refused instead of given one |
+
+#### V-1
+
+dns-01 never validates. RFC 8555, section 8.4: *"Query for TXT records for
+the validation domain name"* - *"_acme-challenge"* below the name.
+
+`Enrollment/ACMEValidator.cs:100` asks `DNSClient.Query(DomainName.Parse(name), ...)`,
+and `DomainName.Parse` of Hermod is a host name's parser: it refuses the
+underscore of `_acme-challenge` ("The given domain name does not match the
+required format!"). Every dns-01 challenge ends invalid with
+`dns: the TXT records of '_acme-challenge....' could not be read`, before a
+question is ever sent - and wildcards, which the PKI proves by dns-01 alone,
+are never issued. Phase 1 did not see it: its codec test replaced `LookupTXT`.
+
+Fix: `DNSServiceName.Parse(name)` (or `DomainName.ParseLenient`), which take
+underscore labels - `BenchNameServerTests` asks the bench's name server that
+way through the same `DNSClient` and gets every record.
+
+Tests: `DNS01ValidationTests` (all 14; each also checks that the validation
+name was asked for, so that none of them passes because nothing was asked).
+
+#### S-1
+
+RFC 8555, section 5: *"Trailing '=' characters MUST be stripped. Encoded
+values that include trailing '=' characters MUST be rejected as improperly
+encoded."*
+
+The PKI decodes with `System.Buffers.Text.Base64Url.DecodeFromChars`, which
+takes padding: the protected header, payload and signature
+(`Enrollment/ACMEJWS.cs:228-234`), the CSR of finalize
+(`HTTPAPI/PKIHTTPAPI.ACME.cs:1211`, a certificate is issued of it) and the
+certificate of revoke-cert (`HTTPAPI/PKIHTTPAPI.ACME.cs:1350`). Fix: refuse a
+value with '=' before decoding it (malformed; badCSR for the CSR).
+
+Tests: `RequestAuthenticationTests.A_Part_Of_The_JWS_With_Padding_Is_Refused` (3),
+`FinalizeTests.A_CSR_With_Padding_Is_Refused`,
+`RevocationTests.A_Certificate_With_Padding_Is_Refused`.
+
+#### S-2
+
+RFC 8555, section 6.2: *"The JWS Unencoded Payload Option [RFC7797] MUST NOT
+be used"*; RFC 7515, section 4.1.11: *"If any of the listed extension Header
+Parameters are not understood and supported by the recipient, then the JWS is
+invalid."*
+
+`Enrollment/ACMEJWS.cs` reads "alg", "jwk", "kid", "nonce" and "url" and
+nothing else of the protected header: a request with `"b64": false,
+"crit": ["b64"]` - a JWS of RFC 7797 whose payload is the base64url text
+itself - opens an account, as does one with a critical parameter of nobody's.
+Fix: refuse every header with "crit" (ACME has no extension that needs one),
+and "b64".
+
+Tests: `RequestAuthenticationTests.A_Request_With_The_Unencoded_Payload_Option_Is_Refused`,
+`...A_Critical_Header_Parameter_It_Does_Not_Know_Makes_The_Request_Invalid`.
+
+#### S-3
+
+RFC 8555, section 6.2: *"If the server supports the signature algorithm "alg"
+but either does not support or chooses to reject the public key "jwk", then
+the server MUST return an error with status code 400 (Bad Request) and type
+"urn:ietf:params:acme:error:badPublicKey"."* - its example, *""jwk" does not
+contain a valid P-256 public key"*.
+
+`Enrollment/ACMEJWS.cs:535` counts on `ECDsa.Create(ECParameters)` to refuse a
+point off the curve. On Linux it does (OpenSSL), and the answer is
+badPublicKey; on Windows (CNG) it does not throw there - the exception comes
+later, in `SignedBy` (`ACMEJWS.cs:281`), which catches nothing, and
+`HTTPAPI/PKIHTTPAPI.ACME.cs:1552` answers it 500 serverInternal. **Windows
+only**: the test is green natively in WSL. Fix:
+`ecdsa.ExportParameters(false)` after import, or validate the point
+(`ECParameters.Validate` does not), or catch `CryptographicException` in
+`SignedBy` as badPublicKey.
+
+Tests: `RequestAuthenticationTests.A_Point_Off_The_Curve_Is_badPublicKey`.
+
+#### S-4
+
+RFC 8555, section 6.3: *"Except for the cases described in this section, if
+the server receives a GET request, it MUST return an error with status code
+405 (Method Not Allowed) and type "malformed"."*
+
+The resources are registered for POST alone (`HTTPAPI/PKIHTTPAPI.ACME.cs:161-171`),
+and Hermod's HTTP server answers the GET: 405, `application/json`,
+`{"request": ..., "description": "Method not allowed!"}` - no problem document,
+no type. Fix: a GET handler of every POST resource that answers the problem
+document of section 6.3.
+
+Tests: `PostAsGetTests.A_GET_Is_Answered_405_malformed` (9),
+`FinalizeTests.The_Certificate_Is_Downloaded_By_A_POST_as_GET`.
+
+#### S-5
+
+RFC 8555, section 6.3: *"The server MUST allow GET requests for the directory
+and newNonce resources (see Section 7.1), in addition to POST-as-GET requests
+for these resources."*
+
+`HTTPAPI/PKIHTTPAPI.ACME.cs:156-158` registers GET for the directory, HEAD and
+GET for newNonce, and no POST: a POST-as-GET is 405. Fix: POST handlers that
+check the JWS (as `ACMEHandle` does) and answer as GET.
+
+Tests: `PostAsGetTests.A_POST_as_GET_Of_The_Directory_Is_Answered_With_The_Directory`,
+`...A_POST_as_GET_Of_newNonce_Is_Answered_With_A_Nonce`.
+
+#### S-6
+
+RFC 8555, section 7.3.4: *"The account object the CA returns MUST include an
+"externalAccountBinding" field with the same value as the field in the
+request."*
+
+`AccountJSON` (`HTTPAPI/PKIHTTPAPI.ACME.cs:1635`) writes status, contact,
+orders, createdAt and termsOfServiceAgreed; the binding is checked
+(`:549-577`) and only its key's id is kept. Fix: keep the binding's JWS with
+the account and write it back.
+
+Tests: `ExternalAccountBindingTests.The_New_Account_Object_Has_The_Binding_As_It_Was_Sent`.
+
+#### S-7
+
+RFC 8555, section 11.1: *"ACME clients and servers MUST verify that a CSR
+submitted in a finalize request does not contain a public key for any known
+account key pair."*
+
+`HTTPAPI/PKIHTTPAPI.ACME.cs:1253` compares the CSR's key with the key of the
+account that finalizes, and no other: a certificate of another account's key
+is signed. Fix: `PKI.ACMEState.AccountByThumbprint(thumbprint) is not null`.
+
+Tests: `FinalizeTests.A_CSR_Of_Another_Account_s_Key_Is_Refused`.
+
+#### S-8
+
+RFC 8555, section 7.1.4: *"Servers MUST verify any identifier values that
+begin with the ASCII-Compatible Encoding prefix "xn--" as defined in
+[RFC5890] are properly encoded."*
+
+`HTTPAPI/PKIHTTPAPI.ACME.cs:955-956` checks a host name's characters; it
+refuses "xn--" alone and "xn--abc-", which no Punycode decoder turns into a
+U-label, but takes "xn--99999999999999", which overflows (RFC 3492, section
+6.4). Fix: decode every "xn--" label (`IdnMapping.GetUnicode`) and encode it
+back.
+
+Tests: `NewOrderTests.An_xn_Label_That_Is_No_A_Label_Is_Refused("xn--99999999999999.example.org")`.
+
+#### S-9
+
+RFC 8738, section 3: *"The value field MUST contain the textual form of the
+address as defined in Section 2.1 of [RFC1123] for IPv4"* - dotted decimal;
+RFC 8555, section 7.4: *"it MUST NOT issue a certificate with contents other
+than those requested"*.
+
+`HTTPAPI/PKIHTTPAPI.ACME.cs:976` reads "ip" with `IPAddress.TryParse`, which
+takes inet_aton's forms: "010.0.0.1" is octal to it, and the order is for
+8.0.0.1 where the client wrote 10.0.0.1. ("127.1", "0x7f.0.0.1" and
+"3221225985" end as the address they say.) Fix: take dotted decimal of four
+parts and RFC 5952 alone, or refuse a value whose `ToString()` is not itself.
+
+Tests: `NewOrderTests.An_Address_Not_In_Its_Textual_Form_Is_Refused_Or_Read_As_Written("010.0.0.1", ...)`.
+
+#### S-10
+
+RFC 9773, section 5: *"If the server accepts a newOrder request with a
+"replaces" field, it MUST reflect that field in the response and in subsequent
+requests for the corresponding Order object."*
+
+`OrderJSON` (`HTTPAPI/PKIHTTPAPI.ACME.cs:1653`) has no "replaces"; the order
+keeps it as the replaced certificate's id (`ACMEOrder.Replaces`). Fix: keep the
+identifier as sent, and write it.
+
+Tests: `RenewalInfoTests.An_Order_That_Replaces_Says_So`.
+
+#### S-11
+
+RFC 9773, section 5: *"Servers SHOULD check that the identified certificate
+and the newOrder request correspond to the same ACME Account, that they share
+at least one identifier, and that the identified certificate has not already
+been marked as replaced by a different Order that is not "invalid"."*
+
+`HTTPAPI/PKIHTTPAPI.ACME.cs:871-889` checks the account, and marks a
+certificate replaced once the replacing order is finalized (`IsReplaced`,
+`:884`), not when it is placed: a certificate of 127.0.0.1 is "replaced" by an
+order of ::1, and by two pending orders at once.
+
+Tests: `RenewalInfoTests.An_Order_Of_None_Of_Its_Names_Does_Not_Replace`,
+`...A_Second_Order_Replacing_The_Same_Certificate_Is_Refused`.
+
+#### S-12
+
+draft-ietf-acme-profiles-03, section 3: *"profiles (optional, object): A map
+of profile names to URLs."*
+
+`HTTPAPI/PKIHTTPAPI.ACME.cs:462` writes the profile's description, or "A
+server's certificate of 7 days." - the draft's -00 and -01 had descriptions,
+-02 made them URLs. Fix: a data URI of the description
+(`data:text/plain;charset=utf-8,...`), which the draft allows.
+
+Tests: `ProfileTests.The_Directory_Names_Its_Profiles_With_URLs`.
+
+#### S-13
+
+draft-ietf-acme-profiles-03, section 4: *"If the server is advertizing
+profiles and receives a newOrder request which does not identify a specific
+profile, it is RECOMMENDED that the server select a profile and associate it
+with the new Order object."*
+
+A PKI with profiles and no default refuses such an order as invalidProfile
+(`HTTPAPI/PKIHTTPAPI.ACME.cs:817-821`). A reading of the PKI's own: "no
+default" is a setting that asks every order to name its profile. Fix, if
+wanted: the first profile, or one marked as the default.
+
+Tests: `ProfileWithoutDefaultTests.An_Order_Without_A_Profile_Gets_One`.
 
 ## Closed
 
@@ -33,4 +261,19 @@ None yet.
 
 Where RFC 8555 does not settle a question, the reading the suite takes, and why.
 
-None yet.
+- **A nonce that is no base64url** (section 6.5.2, *"the verifier MUST reject
+  the JWS as malformed"*): "badNonce" is taken as well as "malformed" - it is
+  the more specific of the two, Boulder and Pebble answer it, and a client
+  retries it with the fresh nonce, which is what helps.
+- **"status" of an account update other than "deactivated"** (section 7.3.2,
+  *"MUST ignore any updates to [...] the "status" field (except as allowed by
+  Section 7.3.6)"*): ignored with 200, or refused as malformed as Boulder
+  does; what is tested is that the status does not change.
+- **A key of another curve than its algorithm** (section 6.2): badPublicKey
+  or badSignatureAlgorithm - the algorithm is supported, the key is not one
+  of it; RFC 8555 names both errors and does not say which.
+- **dns-01 through a CNAME, and a digest in two strings of one TXT record**
+  (section 8.4, *"the contents of one of the TXT records"*): followed and
+  joined, as Let's Encrypt does - Level SHOULD.
+- **Non-canonical address forms** (RFC 8738, section 3): refused, or kept as
+  the address the text says in that form; never read as another (S-9).

@@ -48,4 +48,11 @@ public interface IACMEServerUnderTest : IAsyncDisposable
     /// </summary>
     String    IssuingRootPEM       { get; }
 
+    /// <summary>
+    /// A key of an external account binding (RFC 8555, section 7.3.4) as the
+    /// CA hands it out of band: its key identifier and its MAC key - made the
+    /// way the server's operator makes one, not over ACME.
+    /// </summary>
+    Task<(String KeyId, Byte[] MACKey)> NewExternalAccountKeyAsync();
+
 }

@@ -165,7 +165,15 @@ public sealed class PKIACMEServer : IACMEServerUnderTest
                                       String             IssuerId)
     {
 
-        var json = new JObject(new JProperty("issuer", IssuerId));
+        var json = Options.DefaultProfile
+                       ? new JObject(new JProperty("issuer", IssuerId))
+                       : [];
+
+        if (Options.Profiles is not null)
+            json["profiles"] = new JObject(Options.Profiles.Select(profile => new JProperty(profile.Key, new JObject(
+                                                                                    new JProperty("issuer",       IssuerId),
+                                                                                    new JProperty("validDays",    profile.Value),
+                                                                                    new JProperty("description",  $"{profile.Value} days.")))));
 
         if (Options.ExternalAccountRequired)
             json["externalAccountRequired"] = true;
@@ -205,6 +213,17 @@ public sealed class PKIACMEServer : IACMEServerUnderTest
                    : commit;
 
     }
+
+    #endregion
+
+    #region NewExternalAccountKeyAsync()
+
+    /// <inheritdoc/>
+    public Task<(String KeyId, Byte[] MACKey)> NewExternalAccountKeyAsync()
+
+        => pki.ACMEState.TryNewExternalAccountKey("PKIConformance", "pkiconformance", out var key, out var error)
+               ? Task.FromResult((key.KeyId, key.MACKey))
+               : throw new InvalidOperationException($"The PKI made no key of an external account binding: {error}");
 
     #endregion
 

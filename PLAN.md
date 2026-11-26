@@ -78,6 +78,32 @@ Status legend: ✅ done · 🔶 in progress · ⬜ planned · 📋 optional / do
   finds the same account" (§7.3.1) is therefore a test of `RawACMEClient`
   (phase 2), not of lego.
 
+### Learned in phase 2
+
+- **The PKI's dns-01 never worked** (V-1): Hermod's `DomainName.Parse` is a
+  host name's parser and refuses `_acme-challenge`. Phase 1's codec test had
+  replaced `LookupTXT` and could not see it. A validator is tested against a
+  name server - the bench's, through the server's own `DNSClient` - never
+  against a delegate.
+- **A negative validation test proves nothing by itself**: a validator that
+  never asks refuses every answer, the wrong ones among them. Every negative
+  test of http-01 and dns-01 also asserts that the host or the name server
+  was asked.
+- **One finding, one platform**: `ECDsa.Create(ECParameters)` checks the
+  point on Linux (OpenSSL) and not on Windows (CNG), so a "jwk" off its curve
+  is badPublicKey on one leg and 500 on the other (S-3). Both legs matter.
+- **`System.Buffers.Text.Base64Url` takes padding** (S-1). The decoder RFC
+  8555, section 5 asks for has to be written, as `RawBase64Url` is.
+- **Hermod's HTTP server answers a method without a handler itself** - 405 and
+  a JSON of its own - where ACME wants a problem document of the type
+  "malformed" (S-4), and refuses the POST-as-GET of the directory (S-5).
+- **The bench**: `ScriptedChallengeHost` (HTTP/1.1 on a `TcpListener`, on
+  127.0.0.1 and ::1 at one port, the server's `http01Port` pointed at it),
+  `ScriptedDNSServer` (UDP, the server's resolver through Hermod's
+  `DNSClient`), and every name proven by http-01 an address of RFC 8738, which
+  needs no resolution. `BenchNameServerTests` proves the name server answers
+  what dns-01 needs, so that a red dns-01 test is red at the server.
+
 ---
 
 ## 1. Guiding principles
@@ -188,6 +214,7 @@ Each has tracker tests tagged `ToDo` (excluded from CI like `KnownIssue`).
 | T-S6 | server | http-01 redirect policy: http/https on ports 80/443 only, as Let's Encrypt (an interpretation, RFC 8555 does not settle it) | §8.3, §10.2 |
 | T-S7 | server | `subproblems` for errors of several identifiers | §6.7.1 |
 | T-S8 | server | Move into Hermod | §0.2 |
+| T-S9 | server | EdDSA (Ed25519) account keys - *"SHOULD implement"*; no tracker yet, as .NET has no Ed25519 to sign one with | §6.2 |
 
 ---
 
@@ -237,7 +264,8 @@ identifier parsing and its key change are behind its HTTP resources
 (phase 2). Noted on the way for phase 2: the PKI counts the bits of an RSA
 modulus by whole octets and does not look at the public exponent (e = 1 or
 an even e would be taken), and whether `ECDsa.Create` refuses a point off
-the curve on Linux as it does on Windows is a question for both legs.
+the curve on Linux as it does on Windows is a question for both legs - it is
+the other way round: Linux refuses it, Windows does not (S-3).
 
 | RFC | Topic | Focus |
 |---|---|---|
@@ -250,7 +278,14 @@ the curve on Linux as it does on Windows is a question for both legs.
 | 9773 §4.1 | ARI certificate ID | AKI.serial, serial with leading zero octet, vectors from the RFC |
 | 2986, 5280 | CSR | SAN set, CN length, key/signature algorithm, extensions; parsed with .NET's `CertificateRequest`, not Hermod |
 
-### 4.2 Server (`PKIConformance.ACME.Server.Tests`) — `RawACMEClient` → PKI ⬜
+### 4.2 Server (`PKIConformance.ACME.Server.Tests`) — `RawACMEClient` → PKI ✅ 224
+
+*Phase 2, 2026-11-26: 224 tests besides phase 0's 15 directory and nonce
+tests; 29 red on Windows, 28 natively in WSL, all of them findings S-1 to
+S-13 ([FINDINGS.md](FINDINGS.md)), tagged `KnownIssue`.* Not covered yet:
+persistence across a restart, the revocation as the CRL and OCSP show it
+(by `openssl`), `Accept` variants of the download, rate limits and
+`subproblems` (T-S4, T-S7), EdDSA (T-S9).
 
 Grouped by RFC 8555 section; each line is a test cluster of 3–10 tests.
 
@@ -277,7 +312,13 @@ Grouped by RFC 8555 section; each line is a test cluster of 3–10 tests.
 | profiles draft | Profiles | `meta.profiles`, unknown → `invalidProfile`, order echoes profile, certificate fits it |
 | — | Persistence | accounts survive a restart, orders do not, and a client that re-orders afterwards succeeds |
 
-### 4.3 Validation (`PKIConformance.ACME.Validation.Tests`) — PKI → `ScriptedChallengeHost` ⬜
+### 4.3 Validation (`PKIConformance.ACME.Validation.Tests`) — PKI → `ScriptedChallengeHost` ✅ 40
+
+*Phase 2, 2026-11-26: 40 tests - http-01 green throughout (the request,
+whitespace, wrong bodies and statuses, redirects and their loops, a host that
+never answers, IPv6); dns-01 red throughout, every test of it at V-1; the
+http-01 of a name through the server's `DNSClient` a tracker of T-S5; and
+three self-tests of the bench's name server.*
 
 http-01: 404/500, wrong body, trailing whitespace and CRLF (SHOULD ignore),
 leading whitespace (must fail), body > 8 KiB, slow body, redirects (to HTTPS
@@ -388,7 +429,7 @@ build/
 src/
   PKIConformance.Core/
     RawACME/                        JWS, JWK, thumbprint, EAB, key change, CSR reader, ARI id
-    Scripted/                       RawACMEClient, ScriptedACMEServer, ScriptedChallengeHost
+    Scripted/                       RawACMEClient, ScriptedChallengeHost, ScriptedDNSServer, ScriptedACMEServer
     Fixtures/                       PKIACMEFixture (in-process PKI), BindFixture, PebbleFixture,
                                     StepCAFixture, BoulderFixture, CertbotPeer, LegoPeer,
                                     AcmeShPeer, RecordingProxy
@@ -460,7 +501,7 @@ enrolment protocols (EST, RFC 7030) later, without renaming anything.
 | 0 ✅ | *Done 2026-11-26, locally on Windows and natively in WSL; CI not run yet.* Submodules Norn, Urdr, WWCP_Node, WWCP_Core; slnx; build on Windows and in WSL with `SkipFrontendBuild`; Core skeleton (`Wsl`, categories, `IACMEServerUnderTest`, PKI fixture); CI skeleton; **spikes**: PKI over HTTPS, PKI in-process reachable from WSL | `dotnet build` green on both legs, one trivial interop test (lego registers an account) green in WSL |
 | M | *In Hermod and the PKI, not here:* the ACME server moves into Hermod with an issuer interface; the PKI plugs in its CA; T-S5 on the way. Here: `HermodACMEServer` as a second `IACMEServerUnderTest`, the pins advanced | the server suites green against both implementations |
 | 1 ✅ | *Done 2026-11-26: 87 tests, no finding.* `RawACME` (`src/PKIConformance.Core/RawACME`: base64url, JWK, thumbprint, JWS, key authorization, EAB, key change, ARI id) + Codec tests | all RFC vectors green; Hermod ↔ RawACME ↔ PKI sign/verify in every direction |
-| 2 | Server + Validation conformance | ~150 tests; first findings round for the PKI |
+| 2 ✅ | *Done 2026-11-26: 224 server and 40 validation tests, round 1 of the findings: S-1 to S-13 and V-1, 14 in all.* `RawACMEClient`, `ScriptedChallengeHost`, `ScriptedDNSServer`, `RawCSR`; Server + Validation conformance | ~150 tests; first findings round for the PKI |
 | 3 | `ScriptedACMEServer` + Client conformance | ~80 tests; first findings round for Hermod |
 | 4 | Interop A: certbot, acme.sh, dehydrated, uacme (Debian) and **lego** (pinned upstream v5) → PKI; BIND/RFC 2136 | matrix §4.5 filled except the ARI cells of certbot |
 | 5 | Interop B: Hermod → Pebble (+ nonce storm), step-ca; certbot-vs-Pebble reference layout; Boulder in Docker | matrix §4.6 filled |

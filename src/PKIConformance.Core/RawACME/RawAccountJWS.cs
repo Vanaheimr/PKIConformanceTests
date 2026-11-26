@@ -46,9 +46,9 @@ public static class RawAccountJWS
 
     /// <summary>
     /// The inner JWS of a key change: <i>"The inner JWS MUST have a "jwk" header
-    /// parameter containing the public key of the new key. The inner JWS MUST
-    /// have the same "url" header parameter as the outer JWS. The inner JWS MAY
-    /// omit the "nonce" header parameter."</i> - signed by the new key, with
+    /// parameter, containing the public key of the new key pair. The inner JWS
+    /// MUST have the same "url" header parameter as the outer JWS. The inner JWS
+    /// MUST omit the "nonce" header parameter."</i> - signed by the new key, with
     /// the account URL and the old key as its payload.
     /// </summary>
     public static RawJWS KeyChange(RawKey  NewKey,

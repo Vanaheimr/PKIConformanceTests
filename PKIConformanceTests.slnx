@@ -2,6 +2,7 @@
   <Folder Name="/conformance/">
     <Project Path="conformance/PKIConformance.ACME.Codec.Tests/PKIConformance.ACME.Codec.Tests.csproj" />
     <Project Path="conformance/PKIConformance.ACME.Server.Tests/PKIConformance.ACME.Server.Tests.csproj" />
+    <Project Path="conformance/PKIConformance.ACME.Validation.Tests/PKIConformance.ACME.Validation.Tests.csproj" />
   </Folder>
   <Folder Name="/interop/">
     <Project Path="interop/PKIInterop.ACMEClients.Tests/PKIInterop.ACMEClients.Tests.csproj" />

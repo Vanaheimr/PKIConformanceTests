@@ -18,11 +18,14 @@ suite's own, RFC vectors, openssl, and the peers.
 - [PLAN.md](PLAN.md) - what is tested, how, in which order, and the ToDos
 - [FINDINGS.md](FINDINGS.md) - where the implementations deviate from the RFCs
 
-**State (2026-11-26, PKI `ba8324a9`, Hermod `0a93a6fb`):** phases 0 and 1
-done - 108 ✅ · 0 ❌ · 0 findings natively in WSL (87 codec against the RFC
-examples and the raw reference, 15 server conformance, 6 lego 5.7.0 interop);
-on Windows the 6 lego tests skip, because the Windows firewall keeps WSL out,
-and so does the one test of a certificate dated 0001, which Windows cannot load.
+**State (2026-11-26, PKI `ba8324a9`, Hermod `0a93a6fb`):** phases 0 to 2
+done - natively in WSL 329 ✅ · 43 ❌ of 372 (87 codec, 239 server, 40
+validation, 6 lego 5.7.0 interop), and every red one is a finding or a ToDo:
+**14 findings** against the PKI's server and validator, S-1 to S-13 and V-1 -
+among them dns-01, which never validates - tagged `KnownIssue`, and one
+tracker of T-S5, tagged `ToDo`. On Windows S-3 is red as well, the 6 lego
+tests skip (the Windows firewall keeps WSL out), and so does the one test of
+a certificate dated 0001, which Windows cannot load.
 
 ## Running
 
@@ -62,6 +65,7 @@ wsl sh build/test-in-wsl.sh -c Release --filter "TestCategory=WSL"
 ```
 src/PKIConformance.Core/                 servers under test, peers, WSL bridge, gating
 src/PKIConformance.Core/RawACME/         the reference codec: no Hermod, no PKI, System.Text.Json
+src/PKIConformance.Core/Scripted/        RawACMEClient, and the bench's web and name servers
 conformance/PKIConformance.ACME.*.Tests/ offline, loopback only
 interop/PKIInterop.*.Tests/              real peers
 build/                                   shared MSBuild settings, peers, scripts
