@@ -393,7 +393,10 @@ without profiles, or with others, gets it all the same. Fix: refuse it before
 the order (or leave it out, with a word in the exception), unless the caller
 says it was agreed out of band.
 
-Tests: `OrderTests.A_Profile_The_Server_Does_Not_Advertise_Is_Not_Asked_For` (2).
+Tests: `OrderTests.A_Profile_The_Server_Does_Not_Advertise_Is_Not_Asked_For` (2);
+against real servers (phase 5) `PebbleUpstreamTests.No_Profile_Pebble_Does_Not_Advertise_Is_Asked_For`
+and `BoulderTests.No_Profile_Boulder_Does_Not_Advertise_Is_Asked_For` - both
+of them refuse it as invalidProfile, which Hermod hands on.
 
 #### C-8
 
@@ -488,6 +491,42 @@ Fix: log it when the window changes, and expose the RenewalInfo.
 
 Tests: `CertificateManagerTests.The_explanationURL_Reaches_The_Operator`.
 
+### Round 3 - Hermod against real servers (phase 5, 2026-11-27, Hermod `0a93a6fb`)
+
+Against Pebble 2.6.0 (Debian) and 2.10.3, step-ca 0.30.2 and Boulder
+v0.20261117.0, and against what certbot 4.0.0 writes. Every cell the four
+servers have is green but C-7, which Pebble 2.10.3 and Boulder see as well
+(above), and one new finding. Paths below are relative to
+`libs/Hermod/Hermod/`.
+
+| ID | Level | In short |
+|---|---|---|
+| [M-4](#m-4) | — (certbot's layout) | privkey.pem ends without a newline, where certbot's ends with one |
+
+#### M-4
+
+The manager says of itself that it writes *"fullchain.pem and privkey.pem,
+the names certbot uses"*, and a server of the world is configured for
+certbot's files; certbot ends each of them with a newline (its live/ of a
+real run against Pebble, `fixtures/certbot/live-layout.json`). RFC 7468,
+section 3 makes the last line end optional - which is why this is the
+reference's, not an RFC's - but whatever puts files together by `cat`
+depends on it: `cat privkey.pem fullchain.pem > combined.pem`, the one file
+HAProxy takes, then has "-----END PRIVATE KEY----------BEGIN CERTIFICATE-----"
+on one line, which a PEM reader does not find a certificate in.
+
+`ACME/ACMEClient.cs:824` keeps the key as `ExportPkcs8PrivateKeyPem()`, which
+has no newline at its end, and `ACME/ACMECertificateManager.cs:420` writes it
+as it is; fullchain.pem ends as the server's download does (with a newline,
+at every server tested). Everything else is as certbot's: the names, the
+modes (0644 and 0600), the blocks (certificates only, the leaf first; PKCS#8),
+LF, the kind of key. Fix: a newline after the key, and after the chain where
+the server sent none.
+
+Tests: `CertbotReferenceTests.The_Managers_Files_End_With_A_Newline_As_Certbots`
+(against certbot's live/ itself), `CertificateManagerTests.The_Files_End_With_A_Newline_As_Certbot_Writes_Them`
+(offline, against the fixture).
+
 ## Closed
 
 None yet.
@@ -529,3 +568,25 @@ Where RFC 8555 does not settle a question, the reading the suite takes, and why.
   dehydrated 0.7.2 ordering an address as a "dns" identifier is its own
   mistake, which the PKI answers rightly as malformed - a refusal cell,
   green.
+- **A storm of badNonce** (RFC 8555, section 6.5, a SHOULD retry, and
+  Pebble refusing half or nine in ten of all good nonces): no client with a
+  bound gets through nine in ten reliably, and the RFC sets none. What is
+  judged is how Hermod retries - with the nonce of the answer, the same
+  request again, no nonce twice - and that it gives up, where it does, after
+  its fourth refusal of one request with the server's badNonce in hand.
+- **The certificate files of certbot are the reference of the manager's**
+  (phase 5): no RFC says how a certificate is kept in files, and servers of
+  the world are configured for certbot's live/. A deviation from it that
+  breaks a consumer of those files is a finding of the manager (M-4), even
+  where RFC 7468 allows it.
+- **A directory of plain HTTP** (RFC 8555, section 6.1: *"Each ACME
+  function is accomplished by the client sending a sequence of HTTPS
+  requests"*): Boulder's stack publishes its WFE at http://localhost:4001
+  alone, and Hermod talks to it as it is given; lego 5 refuses one. The
+  section describes and does not bid a client refuse - no finding, and the
+  Boulder lane is the only one on HTTP.
+- **step-ca's CRL against its certificates** (RFC 5280, section 6.3.3): it
+  has an issuing distribution point and they have no distribution point to
+  match, which openssl's `-crl_check` refuses as "different CRL scope". That
+  is step-ca's, not Hermod's; its CRL is judged by its signature and its
+  entries.

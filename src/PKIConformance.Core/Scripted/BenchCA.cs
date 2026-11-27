@@ -40,6 +40,13 @@ public sealed class BenchCA : IDisposable
     public X509Certificate2                Issuing
         => authorities[^1].Certificate;
 
+    /// <summary>
+    /// The key of <see cref="Issuing"/>, as PKCS#8 PEM - for a server of the
+    /// world that issues by the bench's CA, as step-ca does.
+    /// </summary>
+    public String                          IssuingKeyPem
+        => authorities[^1].Key.ExportPkcs8PrivateKeyPem();
+
     #endregion
 
     #region Constructor(s)

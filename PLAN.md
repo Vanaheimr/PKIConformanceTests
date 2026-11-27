@@ -159,6 +159,54 @@ Status legend: ✅ done · 🔶 in progress · ⬜ planned · 📋 optional / do
 - **The PKI keeps "replaces" by its own identifier of the certificate**;
   the bench speaks RFC 9773's (`ServerIssued.Replaces`).
 
+### Learned in phase 5
+
+- **Four servers of other hands find two findings in Hermod, both known
+  or small.** Every cell the servers have is green - accounts, EAB,
+  http-01 by Hermod's own responder, dns-01 by its own, wildcards,
+  addresses, every key, Pebble's storms of badNonce and its chains of every
+  length, profiles, ARI and "replaces", revocation, the manager end to end
+  - except C-7, which Pebble 2.10.3 and Boulder both see (a profile they
+  do not advertise is asked for), and the one new finding of the round:
+  the manager's privkey.pem ends without a newline, where certbot's ends
+  with one (M-4). What phase 3's strict server found, the real ones do not
+  trip over: their URLs need no re-encoding (C-2), and a sequential client
+  never has more than one nonce in its pool (C-3).
+- **The recording is the client's own HttpClient handler**, not a proxy:
+  `RecordingHandler` is handed to `ACMEClient` as its `HttpMessageHandler`,
+  keeps every exchange, and `WireForm` judges them by RawACME afterwards -
+  TLS needs no terminating in between. The judge is tested first, against
+  RawACMEClient and a recording with a nonce used twice and a GET of an
+  order (`BenchServerInteropTests`).
+- **Boulder validates http-01 at port 80, and nothing moves it**
+  (`va.newDefaultPortConfig`). Its challtestsrv resolves every name to a
+  forwarder of the bench on its "public" network - a container of Boulder's
+  own tools image, python3 and no socat in it - that hands each connection
+  to Hermod's responder on the host. Its policy wants public suffixes and
+  counts certificates by registered domain: random names below "le.wtf",
+  which its test configuration exempts; an address only in "shortlived",
+  and only a public one - and no more than two certificates of one set of
+  identifiers in three hours, so the forwarder takes an address of its own
+  at every start. Vitess takes longer to become healthy the first time than
+  compose waits; the second `up` finds it so. And `compose down` keeps the
+  volumes, on which Boulder's MTC log does not start again ("tile exists"):
+  the stack is taken down with them, before a start and after the tests.
+- **Pebble 2.10.3 refuses a request without a User-Agent** (RFC 8555,
+  section 6.1, a MUST of the client); 2.6.0 did not. Hermod sends one; the
+  bench's own HttpClients did not, until its tests said so.
+- **pebble-challtestsrv renamed `-dns01` to `-dnsserver`** after 2.6.0, and
+  Pebble replaced its one validity period by profiles in 2.7.0 - Debian's
+  and upstream's are started by what each knows.
+- **step-ca's CRL has an issuing distribution point, its certificates no
+  distribution point to match it**: "different CRL scope" to `openssl verify
+  -crl_check`. Its CRL is judged by its signature and its entries instead -
+  step-ca's own business, no finding of anybody here.
+- **A test must not skip what the server cannot do**, nor assume it: Debian's
+  Pebble 2.6.0 moves the window of a revoked certificate into the past as
+  2.10.3 and Boulder do, so the manager's renewal by ARI is a cell of all
+  three; step-ca has no ARI, and its cell is the manager's own third of the
+  lifetime.
+
 ---
 
 ## 1. Guiding principles
@@ -386,16 +434,18 @@ NXDOMAIN vs. empty answer, timeouts. The *policy* questions (redirect ports,
 private addresses) go into the "Interpretations" section of `FINDINGS.md`,
 because RFC 8555 does not settle them.
 
-### 4.4 Client (`PKIConformance.ACME.Client.Tests`) — Hermod → `ScriptedACMEServer` ✅ 166
+### 4.4 Client (`PKIConformance.ACME.Client.Tests`) — Hermod → `ScriptedACMEServer` ✅ 168
 
 *Phase 3, 2026-11-26: 161 tests of Hermod's client and certificate manager,
 and 5 of the bench itself (`BenchACMEServerTests`, by RawACME's client); 43
 red, the same on both legs: 31 at the 14 findings of round 2, C-1 to C-11
 and M-1 to M-3 ([FINDINGS.md](FINDINGS.md)), tagged `KnownIssue`, and 12
 trackers, one for each client ToDo T-C1 to T-C12, tagged `ToDo`. On Windows
-the test of the key file's mode skips (POSIX modes).* Not covered yet: the
-manager's files against what certbot writes (needs the reference run of
-phase 5), an order of an unknown status, several challenges of one type.
+the test of the key file's mode skips (POSIX modes). Phase 5, 2026-11-27: the
+manager's files against what certbot writes, by the reference of its real
+run against Pebble (`fixtures/certbot/live-layout.json`) - 2 tests, one red at
+M-4.* Not covered yet: an order of an unknown status, several challenges of
+one type.
 
 | Cluster | Scenarios |
 |---|---|
@@ -469,26 +519,60 @@ its reason, and listed by the PKI's CRL (`openssl verify -crl_check`). What
 the client said - its output, certbot's `letsencrypt.log`, acme.sh's log,
 BIND's log - is the evidence of a red cell.
 
-### 4.6 Interop B (`PKIInterop.ACMEServers.Tests`) — Hermod → real servers ⬜
+### 4.6 Interop B (`PKIInterop.ACMEServers.Tests`) — Hermod → real servers ✅ 108
 
-| Feature | Pebble (+ challtestsrv) | step-ca | Boulder |
-|---|---|---|---|
-| Account, ToS, contact, find by key | ⬜ | ⬜ | ⬜ |
-| EAB | ⬜ (config) | ⬜ (provisioner) | 📋 |
-| http-01 via `HTTP01ChallengeResponder` | ⬜ | ⬜ | ⬜ |
-| dns-01 via `DNS01ChallengeResponder` → challtestsrv `/set-txt` | ⬜ | ⬜ | ⬜ |
-| Wildcard, IP identifiers | ⬜ | ⬜ | ⬜ |
-| `badNonce` storm (`PEBBLE_WFE_NONCEREJECT=50` and `90`) | ⬜ | — | — |
-| Random chain length, alternate roots (Pebble's deliberate variation) | ⬜ | — | — |
-| Profiles, ARI, `replaces` | ⬜ | probe | ⬜ |
-| Revocation | ⬜ | ⬜ | ⬜ |
-| `ACMECertificateManager` end to end, renewal by ARI | ⬜ | ⬜ | ⬜ |
-| Reference run: **certbot against Pebble** writes the `live/` layout the manager is compared with | ⬜ | — | — |
+*Phase 5, 2026-11-27, natively in WSL: 108 tests - 97 of the
+matrix, 4 of the reference run of certbot, 7 of the bench itself - 105
+green, 3 red: C-7 against Pebble 2.10.3 and against Boulder, and M-4, the
+one new finding. Hermod's client takes every cell of the four servers it
+has.*
+
+Every test starts its server - Boulder once for the fixture, it takes
+minutes - with a name server of its own that answers every name with the
+loopback (pebble-challtestsrv; Boulder's own inside its stack), validating
+http-01 at the port of **Hermod's own `HTTP01ChallengeResponder`** (Pebble's
+`httpPort`, step-ca's `--acme-http-port`, Boulder through a forwarder of port
+80) and dns-01 by the records **Hermod's own `DNS01ChallengeResponder`** writes
+through the delegates into challtestsrv's `/set-txt`. Every exchange is kept
+by the client's HTTP handler (`RecordingHandler`) and judged by RawACME
+(`WireForm`): flattened JWS, "url" exactly, nonces handed out and used once,
+the retry after badNonce with the nonce of its answer, POST-as-GET.
+
+✅ green · ❌ red, at a finding · — the server lacks it (no test, principle
+7) · ⬜ not built yet
+
+| Feature | Pebble 2.6.0 (Debian) | Pebble 2.10.3 | step-ca 0.30.2 | **Boulder** v0.20261117.0 (Docker) |
+|---|---|---|---|---|
+| Account: new + ToS + contact / found by its key / none for a new key | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ | ✅ (no ToS) / ✅ / ✅ | ✅ / ✅ / ✅ |
+| EAB: bound / without one Hermod says so and sends nothing / a wrong MAC refused | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ | ⬜ (keys by its admin API, the step CLI) | — |
+| http-01 by Hermod's responder: a name / 16 names | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ |
+| dns-01 by Hermod's responder, record taken away after | ✅ | ✅ | ✅ | ✅ |
+| Wildcard by dns-01 and its base by http-01 | ✅ | ✅ | ✅ | ✅ |
+| IP identifiers v4 / v6 (RFC 8738) | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | ✅ in "shortlived" / ⬜ (the bench's network is v4) |
+| Certificate keys P-256, P-384, RSA 2048, 4096 | ✅ | ✅ | ✅ | ✅ |
+| `badNonce` storm of 50 % / 90 % (`PEBBLE_WFE_NONCEREJECT`) | ✅ / ✅ | ✅ / ✅ | — | — |
+| Chains of 1, 2, 4 intermediates / alternate roots: the default chain kept (choosing one: T-C6) | ✅ / ✅ | ✅ / ✅ | — | — |
+| A valid authorization reused, not proven again (`PEBBLE_AUTHZREUSE`) | ✅ | ✅ | ⬜ | ⬜ |
+| Profiles: issued / unknown refused / an unadvertised one not asked for | — | ✅ / ✅ / ❌ C-7 | — | ✅ / ✅ / ❌ C-7 |
+| ARI: the window in the lifetime / "replaces" sent and taken | ✅ (draft 03) / ✅ | ✅ / ✅ | — | ✅ / ✅ |
+| Revocation: with a reason, as the server keeps it / again: `alreadyRevoked` | ✅ / ✅ | ✅ / ✅ | ✅ in its CRL, by openssl / ⬜ | ⬜ / ✅ |
+| Manager: files / renewal when the server's window is due / by a third of the lifetime, without ARI | ✅ / ✅ / — | ✅ / ✅ / — | ✅ / — / ✅ | ✅ / ✅ / — |
+| Every exchange as RFC 8555 has it, by RawACME | ✅ | ✅ | ✅ | ✅ |
+
+**The reference run** (`CertbotReferenceTests`, certbot 4.0.0 against
+Pebble 2.10.3): the manager's fullchain.pem and privkey.pem are named,
+moded (0644, 0600), encoded (PEM blocks, PKCS#8, LF) and of the kind of key
+of certbot's own ✅; they end without a newline where certbot's end with one
+❌ M-4; Hermod's `ServerCertificateFile` reads certbot's live/ through its
+symbolic links ✅; and a manager pointed at certbot's live/ takes the
+certificate over and orders nothing ✅. What certbot wrote is
+`fixtures/certbot/live-layout.json`, the reference of the offline test of
+§4.4.
 
 Pebble is the gate (it exists to catch client assumptions); step-ca is a
 second, unrelated server stack; Boulder is Let's Encrypt's production code and
-the strongest evidence that Hermod works against Let's Encrypt — nightly only,
-because its compose stack is heavy.
+the strongest evidence that Hermod works against Let's Encrypt - in the
+nightly's Docker lane, because its compose stack is heavy.
 
 ### 4.7 Baseline diagonal — Hermod ↔ PKI ⬜
 
@@ -508,9 +592,7 @@ build/
   CommonTestSettings.props          net11.0, NUnit 5, analyzers (as DNS/SMTP/NTS)
   test-in-wsl.sh                    the suite natively in WSL, from a copy in the Linux file system
   bench-namespace.sh                a run where the bench's names resolve to the loopback (no root)
-  peers/                            setup-wsl.sh (--check), pins.env (versions + SHA-256),
-                                    later pebble/*.json, step-ca/*.json,
-                                    boulder/compose.override.yml
+  peers/                            setup-wsl.sh (--check, --with-boulder, --only-boulder), pins.env (versions + SHA-256)
 src/
   PKIConformance.Core/
     RawACME/                        JWS, JWK, thumbprint, EAB, key change, CSR reader, ARI id
@@ -518,8 +600,9 @@ src/
                                     BenchCA (issues with .NET alone), BenchClock (a TimeProvider that writes every wait down)
     Servers/                        IACMEServerUnderTest, PKIACMEServer (in-process PKI), BenchTLS
     Peers/                          Peer, Lego, Certbot, AcmeSh, Dehydrated, Uacme, Bind (BIND 9 with RFC 2136);
-                                    later PebbleFixture, StepCAFixture, BoulderFixture, RecordingProxy
-    Wsl.cs  TestEnvironment.cs  TestCategories.cs  OpenSSL.cs  BenchNames.cs
+                                    Pebble, StepCA, Boulder, ChallTestSrv (IACMEServerPeer, IChallengeDNS),
+                                    RecordingHandler, WireForm (the recorded exchanges judged by RawACME)
+    Wsl.cs  TestEnvironment.cs  TestCategories.cs  OpenSSL.cs  BenchNames.cs  Pins.cs  Fixtures.cs
 conformance/
   PKIConformance.ACME.Codec.Tests/
   PKIConformance.ACME.Server.Tests/
@@ -530,7 +613,7 @@ interop/
   PKIInterop.ACMEServers.Tests/     Hermod → Pebble, step-ca, Boulder
   PKIInterop.PublicCAs.Tests/       Let's Encrypt staging (Online, opt-in)
 InteropReport/                      .trx → docs/INTEROP-MATRIX.md (as in SSH)
-fixtures/                           recorded answers of real servers, certbot's live/ layout
+fixtures/                           certbot/live-layout.json: what certbot writes into live/
 libs/  Styx  Hermod  Norn  Urdr  PKI  WWCP_Node  WWCP_Core
 ```
 
@@ -560,6 +643,8 @@ enrolment protocols (EST, RFC 7030) later, without renaming anything.
 - **Peers** in three tiers, following NTS/SSH. Debian 13.7 candidates, as
   checked on 2026-11-26: certbot 4.0.0 (+ dns-rfc2136 4.0.0), lego **4.9.1**,
   acme.sh 3.1.1, pebble 2.6.0, dehydrated 0.7.2, uacme 1.7.6, bind9 9.20.
+  Pinned upstream since phase 5: lego 5.7.0, step-ca 0.30.2, Pebble 2.10.3
+  (beside Debian's 2.6.0, both tested), Boulder v0.20261117.0.
   1. *Debian 13 packages* (`apt`) — gating in the nightly for certbot,
      acme.sh, Pebble, dehydrated, uacme and BIND.
   2. *Upstream, pinned* (`build/peers/pins.env` with version + SHA-256): lego
@@ -568,13 +653,15 @@ enrolment protocols (EST, RFC 7030) later, without renaming anything.
      from the start**: Debian's 4.9.1 is from 2022 and has neither ARI nor
      profiles. certbot 4.0.0 has profiles but no ARI (that came in 4.1.0), so
      the ARI cells of certbot also need this tier.
-  3. *Docker*: Boulder's compose stack at a pinned commit; nightly, `Docker`.
+  3. *Docker*: Boulder's compose stack at a pinned tag and commit, the
+     images of its tools, Vitess and Sunlight at the tags of its CI; the
+     nightly's `boulder` lane, `Docker`.
 - **Ports** — every peer on a random high port; `http01Port` of the PKI set to
   the client's listener (`--http-01-port`, `--http.port`, `--httpport`). One
   test per client keeps the real port 80 (`asRoot`) to cover the default path.
-- **Recording proxy** — a small loopback HTTP proxy in Core that stores every
-  exchange as JSON in `artifacts/`; evidence for findings and source of
-  `fixtures/`.
+- **Recording** — `RecordingHandler`, the `HttpMessageHandler` of the
+  client under test: every exchange kept, the evidence of a red test, and
+  judged by `WireForm` (RawACME). No proxy: TLS needs no terminating.
 - **Categories** — `Loopback`, `WSL`, `Docker`, `Online`, `Slow`, `KnownIssue`
   (an implemented feature deviates), `ToDo` (a feature not implemented yet).
 
@@ -590,7 +677,7 @@ enrolment protocols (EST, RFC 7030) later, without renaming anything.
 | 2 ✅ | *Done 2026-11-26: 224 server and 40 validation tests, round 1 of the findings: S-1 to S-13 and V-1, 14 in all.* `RawACMEClient`, `ScriptedChallengeHost`, `ScriptedDNSServer`, `RawCSR`; Server + Validation conformance | ~150 tests; first findings round for the PKI |
 | 3 ✅ | *Done 2026-11-26: 166 client tests, round 2 of the findings: C-1 to C-11 and M-1 to M-3, 14 in all; a tracker for every client ToDo.* `ScriptedACMEServer`, `BenchCA`, `BenchClock`; Client conformance | ~80 tests; first findings round for Hermod |
 | 4 🔶 | *2026-11-27: 122 interop tests natively in WSL, 116 green, the 6 red ones dns-01 at V-1; no new finding. Not built yet: dns-01 by the hooks of dehydrated and uacme, certbot's account keys, dehydrated's revocation by key, tls-alpn-01 of dehydrated and uacme.* Interop A: certbot, acme.sh, dehydrated, uacme (Debian) and **lego** (pinned upstream v5) → PKI; BIND/RFC 2136; `bench-namespace.sh` | matrix §4.5 filled except the ARI cells of certbot |
-| 5 | Interop B: Hermod → Pebble (+ nonce storm), step-ca; certbot-vs-Pebble reference layout; Boulder in Docker | matrix §4.6 filled |
+| 5 ✅ | *Done 2026-11-27: 108 interop tests natively in WSL, Boulder in Docker; round 3 of the findings: M-4; C-7 seen by Pebble and Boulder. Not built yet: EAB of step-ca, IPv6 against Boulder, authorization reuse of step-ca and Boulder.* Interop B: Hermod → Pebble 2.6.0 and 2.10.3 (+ nonce storm, chains, alternate roots), step-ca, Boulder in Docker; certbot-vs-Pebble reference layout, kept as a fixture | matrix §4.6 filled |
 | 6 | Upstream tier with pins; `InteropReport` → `docs/INTEROP-MATRIX.md`; nightly lanes incl. `against-submodule-masters` | matrix generated, nightly green |
 | 7 | Optional: Posh-ACME and win-acme on the **Windows** leg (no WSL on hosted runners — real interop there too), Python `acme` driver for what no CLI does (key change, authz deactivation), Let's Encrypt staging, mutation sweep (`MUTATION.md`), JWS/JSON fuzzing of the PKI | as far as useful |
 
@@ -601,7 +688,7 @@ enrolment protocols (EST, RFC 7030) later, without renaming anything.
 ```
 dotnet test PKIConformanceTests.slnx --filter "TestCategory!=Online&TestCategory!=WSL&TestCategory!=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
 dotnet test PKIConformanceTests.slnx --filter "TestCategory=WSL&TestCategory!=KnownIssue&TestCategory!=ToDo"
-dotnet test PKIConformanceTests.slnx --filter "TestCategory=Docker"
+dotnet test interop/PKIInterop.ACMEServers.Tests --filter "TestCategory=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
 dotnet test PKIConformanceTests.slnx --filter "TestCategory=KnownIssue|TestCategory=ToDo"
 ```
 
@@ -609,7 +696,8 @@ dotnet test PKIConformanceTests.slnx --filter "TestCategory=KnownIssue|TestCateg
 
 CI as in the siblings: `ci.yml` on `windows-latest` and `debian:13` with the
 offline set; `nightly.yml` with the WSL set natively on Debian (red on any
-skip), the upstream tier, the Docker lane (Boulder), `against-submodule-masters`
+skip), the Docker lane `boulder` on the runner itself (red on any skip as well;
+Boulder by `setup-wsl.sh --only-boulder`), the upstream tier, `against-submodule-masters`
 (Hermod and PKI at master), and `KnownIssue` to report what now passes.
 
 ---

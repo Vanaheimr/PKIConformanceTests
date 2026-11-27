@@ -1,0 +1,42 @@
+{
+  "about": "What certbot itself writes into live/<name>/ - the reference of Hermod's certificate manager (PLAN.md, section 4.4). Taken by CertbotReferenceTests (interop/PKIInterop.ACMEServers.Tests) on 2026-11-27; each file: where its symbolic link points, the mode of what it points to, the labels of its blocks of PEM, its line ends, whether it ends with a newline, the kind of a private key.",
+  "certbot": "certbot 4.0.0",
+  "server": "Pebble 2.10.3",
+  "live": {
+    "README": {
+      "mode": "0644",
+      "pem": [],
+      "lineEnd": "LF",
+      "finalNewline": true
+    },
+    "cert.pem": {
+      "mode": "0644",
+      "pem": [ "CERTIFICATE" ],
+      "lineEnd": "LF",
+      "finalNewline": true,
+      "link": "../../archive/www.acme.test/cert1.pem"
+    },
+    "chain.pem": {
+      "mode": "0644",
+      "pem": [ "CERTIFICATE" ],
+      "lineEnd": "LF",
+      "finalNewline": true,
+      "link": "../../archive/www.acme.test/chain1.pem"
+    },
+    "fullchain.pem": {
+      "mode": "0644",
+      "pem": [ "CERTIFICATE", "CERTIFICATE" ],
+      "lineEnd": "LF",
+      "finalNewline": true,
+      "link": "../../archive/www.acme.test/fullchain1.pem"
+    },
+    "privkey.pem": {
+      "mode": "0600",
+      "pem": [ "PRIVATE KEY" ],
+      "lineEnd": "LF",
+      "finalNewline": true,
+      "link": "../../archive/www.acme.test/privkey1.pem",
+      "key": "EC 256"
+    }
+  }
+}

@@ -18,6 +18,82 @@ public static class OpenSSL
     private static readonly Lazy<String> version = new (() => Wsl.Run("openssl version", TimeSpan.FromSeconds(15)).StdOut.Trim());
 
     /// <summary>
+    /// The entries of a CRL as <c>openssl crl -text</c> reads it: the serial
+    /// number - hexadecimal, upper case, without leading zeros - and its
+    /// reason ("Superseded", "Key Compromise", ...), or "" without one.
+    /// </summary>
+    /// <param name="CRL">The CRL, DER.</param>
+    public static IReadOnlyDictionary<String, String> CRLEntries(Byte[] CRL)
+    {
+
+        var file = Path.Combine(Path.GetTempPath(), $"pkiconformance-crl-{Guid.NewGuid():N}.der");
+
+        try
+        {
+
+            File.WriteAllBytes(file, CRL);
+
+            var lines   = Wsl.Run($"openssl crl -inform DER -in '{Wsl.ToWslPath(file)}' -noout -text", TimeSpan.FromSeconds(15)).
+                              StdOut.Split('\n').Select(line => line.Trim()).ToArray();
+
+            var entries = new Dictionary<String, String>(StringComparer.Ordinal);
+            var serial  = (String?) null;
+
+            for (var i = 0; i < lines.Length; i++)
+            {
+
+                if (lines[i].StartsWith("Serial Number:", StringComparison.Ordinal))
+                {
+                    serial          = lines[i]["Serial Number:".Length..].Trim().TrimStart('0').ToUpperInvariant();
+                    entries[serial] = "";
+                }
+
+                else if (serial is not null && lines[i].StartsWith("X509v3 CRL Reason Code:", StringComparison.Ordinal) && i + 1 < lines.Length)
+                    entries[serial] = lines[i + 1];
+
+            }
+
+            return entries;
+
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+
+    }
+
+    /// <summary>
+    /// <c>openssl crl -verify</c>: whether the CRL is signed by its issuer -
+    /// "verify OK" - given as PEM.
+    /// </summary>
+    /// <param name="CRL">The CRL, DER.</param>
+    /// <param name="IssuerPEM">The certificate of its issuer.</param>
+    public static Wsl.Result VerifyCRL(Byte[]  CRL,
+                                       String  IssuerPEM)
+    {
+
+        var directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"pkiconformance-openssl-{Guid.NewGuid():N}")).FullName;
+
+        try
+        {
+
+            File.WriteAllBytes(Path.Combine(directory, "issuer.crl"), CRL);
+            File.WriteAllText (Path.Combine(directory, "issuer.pem"), IssuerPEM);
+
+            var wsl = Wsl.ToWslPath(directory);
+
+            return Wsl.Run($"openssl crl -inform DER -in '{wsl}/issuer.crl' -CAfile '{wsl}/issuer.pem' -noout 2>&1", TimeSpan.FromSeconds(15));
+
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch (IOException) { }
+        }
+
+    }
+
+    /// <summary>
     /// <c>openssl verify</c> of a leaf with the intermediates of its chain,
     /// against the root - and, where a CRL is given, with <c>-crl_check</c>.
     /// </summary>

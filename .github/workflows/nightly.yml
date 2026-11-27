@@ -74,3 +74,57 @@ jobs:
         with:
           name: nightly-peers
           path: artifacts/*.trx
+
+  boulder:
+    # Hermod's client against Boulder, Let's Encrypt's own server: its compose
+    # stack at the pinned tag (build/peers/pins.env), on the runner itself -
+    # Docker in the Debian container of the other lane would be Docker in
+    # Docker. Red on any skip, as there.
+    name: boulder (docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '11.0.x'
+
+      - name: Install Boulder
+        run: sudo sh build/peers/setup-wsl.sh --only-boulder
+
+      - name: Build
+        run: dotnet build PKIConformanceTests.slnx --configuration Release
+
+      - name: Test (Boulder)
+        timeout-minutes: 60
+        run: >
+          dotnet test interop/PKIInterop.ACMEServers.Tests --configuration Release --no-build
+          --filter "TestCategory=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFilePrefix=boulder"
+          --results-directory artifacts
+
+      - name: No test may have skipped
+        shell: bash
+        run: |
+          skipped=$(cat artifacts/boulder*.trx | grep -o 'outcome="NotExecuted"' | wc -l)
+          echo "skipped: $skipped"
+          test "$skipped" -eq 0
+
+      - name: Boulder's logs
+        if: failure()
+        working-directory: /usr/local/lib/pkiconformance
+        run: |
+          cd boulder-*
+          docker compose -p pkiconformance-boulder logs --no-color > "$GITHUB_WORKSPACE/artifacts/boulder.log" 2>&1 || true
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-boulder
+          path: |
+            artifacts/*.trx
+            artifacts/boulder.log

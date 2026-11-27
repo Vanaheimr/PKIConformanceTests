@@ -19,17 +19,21 @@ suite's own, RFC vectors, openssl, and the peers.
 - [FINDINGS.md](FINDINGS.md) - where the implementations deviate from the RFCs
 
 **State (2026-11-27, PKI `ba8324a9`, Hermod `0a93a6fb`):** phases 0 to 3
-done, phase 4 nearly - natively in WSL 562 ✅ · 92 ❌ of 654 (87 codec, 239
-server, 40 validation, 166 client, 122 interop with certbot 4.0.0, lego
-5.7.0, acme.sh 3.1.1, dehydrated 0.7.2 and uacme 1.7.6 - the matrix of
-[PLAN.md](PLAN.md), section 4.5), and every red one is a finding
-or a ToDo: **28 findings**, tagged `KnownIssue` - 14 against the PKI's server
+and 5 done, phase 4 nearly - natively in WSL 668 ✅ · 96 ❌ of 764 (87 codec,
+239 server, 40 validation, 168 client, 122 interop of five real clients
+against the PKI - certbot 4.0.0, lego 5.7.0, acme.sh 3.1.1, dehydrated 0.7.2,
+uacme 1.7.6 - and 108 of Hermod against four real servers - Pebble 2.6.0
+and 2.10.3, step-ca 0.30.2, Boulder in Docker; the matrices of
+[PLAN.md](PLAN.md), sections 4.5 and 4.6), and every red one is a finding
+or a ToDo: **29 findings**, tagged `KnownIssue` - 14 against the PKI's server
 and validator, S-1 to S-13 and V-1 (among them dns-01, which never
-validates - for three real clients too, whose records reach BIND), and 14
+validates - for three real clients too, whose records reach BIND), and 15
 against Hermod's client and certificate manager, C-1 to
-C-11 and M-1 to M-3 (among them a certificate chain with a private key in
+C-11 and M-1 to M-4 (among them a certificate chain with a private key in
 it, which the client takes) - and 13 trackers of ToDos, T-S5 and T-C1 to
-T-C12, tagged `ToDo`. The real clients found nothing new. On Windows S-3 is
+T-C12, tagged `ToDo`. The real clients found nothing new in the PKI; the
+real servers found one thing in Hermod, M-4 (privkey.pem without the final
+newline of certbot's), and saw C-7 again. On Windows S-3 is
 red as well, the interop tests skip
 (the Windows firewall keeps WSL out), and so do the test of a certificate
 dated 0001, which Windows cannot load, and the one of a key file's POSIX mode.
@@ -64,13 +68,28 @@ through Hermod's DNSClient (T-S5), and uacme, which takes no CA file, finds
 the bench's root in the system's bundle. The system's `/etc/hosts` and CA
 bundle are never touched.
 
+Hermod's client against Boulder, Let's Encrypt's own server, needs its
+Docker compose stack - several GB of images - and a Docker daemon in WSL:
+
+```
+wsl -u root sh build/peers/setup-wsl.sh --with-boulder
+```
+
+```
+wsl sh build/test-in-wsl.sh -c Release --filter "TestCategory=Docker"
+```
+
+The stack takes a few minutes to start, and is stopped after the tests;
+`PKICONFORMANCE_KEEP_BOULDER=1` in the environment keeps it running for the
+next run.
+
 ## Test categories
 
 | Category | Needs | Run with |
 |---|---|---|
 | *(none)* | nothing but loopback | the default filter above |
 | `WSL` | the peers, inside WSL or natively on Linux | `build/test-in-wsl.sh --filter "TestCategory=WSL"` |
-| `Docker` | a Docker daemon (Boulder) | `--filter "TestCategory=Docker"` |
+| `Docker` | a Docker daemon and Boulder's stack (`setup-wsl.sh --with-boulder`) | `build/test-in-wsl.sh --filter "TestCategory=Docker"` |
 | `Online` | the internet (Let's Encrypt staging) | `--filter "TestCategory=Online"` |
 | `KnownIssue` | - | red until the finding is fixed |
 | `ToDo` | - | red until the feature is implemented |
@@ -81,8 +100,11 @@ bundle are never touched.
 src/PKIConformance.Core/                 servers under test, peers, WSL bridge, gating
 src/PKIConformance.Core/RawACME/         the reference codec: no Hermod, no PKI, System.Text.Json
 src/PKIConformance.Core/Scripted/        RawACMEClient, ScriptedACMEServer, the bench's web and name servers, CA and clock
+src/PKIConformance.Core/Peers/           the peers: clients, servers, BIND, challtestsrv, the recording and its judge
 conformance/PKIConformance.ACME.*.Tests/ offline, loopback only
-interop/PKIInterop.*.Tests/              real peers
+interop/PKIInterop.ACMEClients.Tests/    real clients against the PKI
+interop/PKIInterop.ACMEServers.Tests/    Hermod against real servers
+fixtures/                                what real peers wrote, as references: certbot's live/
 build/                                   shared MSBuild settings, peers, scripts
 libs/                                    the submodules
 ```

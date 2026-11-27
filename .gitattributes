@@ -2,3 +2,6 @@
 # script whose first directive is "set -e<CR>" is rejected by dash as an
 # illegal option - the lesson DNSConformanceTests learned with resign.sh.
 *.sh text eol=lf
+
+# And so do the files they source.
+*.env text eol=lf

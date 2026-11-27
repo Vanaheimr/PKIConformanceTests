@@ -158,6 +158,74 @@ public class CertificateManagerTests : ClientFixture
 
     }
 
+    /// <summary>
+    /// The files as certbot itself writes them - its live/ of a real run
+    /// against Pebble, kept as fixtures/certbot/live-layout.json: certificates
+    /// only in fullchain.pem, the leaf first; a PKCS#8 key in privkey.pem; LF.
+    /// </summary>
+    [Test]
+    [Property("Level", "—")]
+    public async Task The_Files_Are_Encoded_As_Certbot_Writes_Them()
+    {
+
+        var certbot        = Fixtures.JSON("certbot/live-layout.json")["live"]!;
+        var client         = await ClientWithAccountAsync();
+        await using var m  = Manager(client);
+        await m.RenewAsync();
+
+        var fullChain      = File.ReadAllText(m.FullChainPath!);
+        var key            = File.ReadAllText(m.PrivateKeyPath!);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(Labels(fullChain).Distinct(),  Is.EqualTo(Labels(certbot["fullchain.pem"]!).Distinct()), "fullchain.pem: certificates only, as certbot's");
+            Assert.That(Labels(key),                   Is.EqualTo(Labels(certbot["privkey.pem"]!)),              "privkey.pem: the key as certbot's");
+            Assert.That(fullChain.Contains('\r') || key.Contains('\r') ? "CRLF" : "LF",
+                                                       Is.EqualTo(certbot["privkey.pem"]!["lineEnd"]!.ToString()), "the line ends, as certbot's");
+            Assert.That(X509Certificate2.CreateFromPem(fullChain).RawData, Is.EqualTo(Server.Certificates.Single().DER), "the leaf first");
+        }
+
+    }
+
+    /// <summary>
+    /// certbot ends each file with a newline; RFC 7468, section 3 makes the
+    /// last one optional - and <c>cat privkey.pem fullchain.pem</c>, a file
+    /// as HAProxy takes one, then has "-----END PRIVATE KEY----------BEGIN
+    /// CERTIFICATE-----" on one line (M-4).
+    /// </summary>
+    [Test]
+    [Property("RFC", "7468 §3")]
+    [Property("Level", "—")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "M-4")]
+    public async Task The_Files_End_With_A_Newline_As_Certbot_Writes_Them()
+    {
+
+        var certbot        = Fixtures.JSON("certbot/live-layout.json")["live"]!;
+        var client         = await ClientWithAccountAsync();
+        await using var m  = Manager(client);
+        await m.RenewAsync();
+
+        using (Assert.EnterMultipleScope())
+        {
+            foreach (var file in new[] { ACMECertificateManager.FullChainFile, ACMECertificateManager.PrivateKeyFile })
+                Assert.That(File.ReadAllText(Path.Combine(directory, file)).EndsWith('\n'), Is.EqualTo(certbot[file]!["finalNewline"]!.GetValue<Boolean>()),
+                            $"{file}: a newline at the end, as certbot's");
+        }
+
+    }
+
+    /// <summary>The labels of the blocks of PEM of a text.</summary>
+    private static String[] Labels(String PEM)
+
+        => [ .. PEM.Split('\n').
+                    Where (line => line.StartsWith("-----BEGIN ", StringComparison.Ordinal)).
+                    Select(line => line.TrimEnd('\r')["-----BEGIN ".Length..].TrimEnd('-')) ];
+
+    /// <summary>The labels of a file of the fixture.</summary>
+    private static String[] Labels(System.Text.Json.Nodes.JsonNode File)
+        => [ .. File["pem"]!.AsArray().Select(label => label!.ToString()) ];
+
     #endregion
 
     #region When (RFC 9773, section 4.2)
