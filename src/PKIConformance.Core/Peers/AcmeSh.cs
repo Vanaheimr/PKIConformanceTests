@@ -1,36 +1,74 @@
 namespace PKIConformance.Core.Peers;
 
 /// <summary>
+/// A build of acme.sh: Debian's package, or upstream's at its pin, a clone
+/// at the release tag beside it (build/peers/pins.env).
+/// </summary>
+/// <param name="Tier">"Debian" or "Upstream".</param>
+/// <param name="Script">The acme.sh that runs; its dnsapi/ beside it.</param>
+public sealed record AcmeShBuild(String  Tier,
+                                 String  Script)
+{
+
+    /// <summary>Debian 13's acme.sh, 3.1.1: no ARI and no profiles.</summary>
+    public static AcmeShBuild Debian { get; } = new ("Debian", "/usr/bin/acme.sh");
+
+    /// <summary>
+    /// Upstream's acme.sh at its pin: ARI - the window read at every renewal,
+    /// "replaces" sent - and profiles.
+    /// </summary>
+    public static AcmeShBuild Upstream
+        => new ("Upstream", $"{Pins.Lib}/acme.sh-{Pins.Get("ACMESH_VERSION")}/acme.sh");
+
+    /// <summary>
+    /// What <c>acme.sh --version</c> says, and "(Debian)" for Debian's:
+    /// "acme.sh 3.1.1 (Debian)", "acme.sh 3.1.7".
+    /// </summary>
+    public String Version
+        => versions.GetOrAdd(Tier, _ => {
+               var said = Wsl.Run($"{Peer.Quote(Script)} --version", TimeSpan.FromSeconds(15)).StdOut.Trim().Split('\n').Last().Trim().TrimStart('v');
+               return $"acme.sh {said}" + (Tier == "Debian" ? " (Debian)" : "");
+           });
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<String, String> versions = new ();
+
+    /// <inheritdoc/>
+    public override String ToString()
+        => Version;
+
+}
+
+
+/// <summary>
 /// acme.sh (https://github.com/acmesh-official/acme.sh), the ACME client in
-/// shell, as a peer: Debian's package, its home, configuration and
+/// shell, as a peer - Debian's or upstream's - its home, configuration and
 /// certificates in the peer's directory.
 /// </summary>
-/// <remarks>
-/// Debian 13 has acme.sh 3.1.1: no ARI and no profiles - grey cells.
-/// </remarks>
 public sealed class AcmeSh : Peer
 {
+
+    /// <summary>The build that runs.</summary>
+    public AcmeShBuild Build { get; }
 
     /// <summary>
     /// An acme.sh that trusts the given root - a PEM file of this process.
     /// </summary>
-    public AcmeSh(String TrustedRootFile)
+    /// <param name="TrustedRootFile">The root it trusts.</param>
+    /// <param name="Build">Debian's, by default, or upstream's.</param>
+    public AcmeSh(String        TrustedRootFile,
+                  AcmeShBuild?  Build = null)
+
         : base("acmesh", TrustedRootFile)
+
     {
+
+        this.Build = Build ?? AcmeShBuild.Debian;
+
         // acme.sh writes into them, and makes neither.
         System.IO.Directory.CreateDirectory(PathOf("config"));
         System.IO.Directory.CreateDirectory(PathOf("certs"));
+
     }
-
-    #region Properties
-
-    /// <summary>What <c>acme.sh --version</c> says.</summary>
-    public static String Version
-        => version.Value;
-
-    private static readonly Lazy<String> version = new (() => "acme.sh " + Wsl.Run("acme.sh --version", TimeSpan.FromSeconds(15)).StdOut.Trim().Split('\n').Last().Trim());
-
-    #endregion
 
 
     #region Run(Arguments, Environment = null, Timeout = null)
@@ -43,7 +81,7 @@ public sealed class AcmeSh : Peer
                           String?    Environment  = null,
                           TimeSpan?  Timeout      = null)
 
-        => Shell($"{Environment} acme.sh --home {Quote(WslDirectory)} --config-home {Quote(WslPathOf("config"))} --cert-home {Quote(WslPathOf("certs"))} " +
+        => Shell($"{Environment} {Quote(Build.Script)} --home {Quote(WslDirectory)} --config-home {Quote(WslPathOf("config"))} --cert-home {Quote(WslPathOf("certs"))} " +
                  $"--ca-bundle {Quote(TrustedRoot)} --log {Quote(WslPathOf("acme.sh.log"))} {Arguments}",
                  Timeout ?? TimeSpan.FromSeconds(180));
 

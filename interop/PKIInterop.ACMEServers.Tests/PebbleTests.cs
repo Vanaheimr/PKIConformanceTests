@@ -42,6 +42,10 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     protected override String[] Tools
         => [ Build().Binary, Build().ChallTestSrvBinary, "openssl", "dig" ];
 
+    /// <inheritdoc/>
+    protected override String   PeerName
+        => Build().Name;
+
     /// <summary>A Pebble of the build, validating http-01 at Hermod's responder.</summary>
     protected Pebble StartPebble(PebbleOptions? Options = null)
         => Use(Pebble.Start(Build(), HTTP01Port, Options));
@@ -52,6 +56,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     #region Accounts (RFC 8555, section 7.3)
 
     [Test, Property("RFC", "8555 §7.3"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodAccount)]
     public async Task An_Account_Is_Opened_With_A_Contact_And_The_Terms()
     {
 
@@ -73,6 +78,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.3.1"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodAccountFound)]
     public async Task The_Same_Key_Finds_The_Same_Account()
     {
 
@@ -95,6 +101,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.3.1"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodAccountNone)]
     public async Task A_Key_Without_An_Account_Finds_None()
     {
 
@@ -105,6 +112,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.3.4"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodEABBound)]
     public async Task An_External_Account_Is_Bound()
     {
 
@@ -121,6 +129,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.3.4"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodEABMissing)]
     public async Task Without_A_Binding_Hermod_Says_So_And_Sends_Nothing()
     {
 
@@ -137,6 +146,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.3.4"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodEABWrongMAC)]
     public async Task A_Binding_Of_A_Wrong_MAC_Is_Refused_In_Pebbles_Words()
     {
 
@@ -155,6 +165,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     #region http-01 and dns-01 (RFC 8555, sections 8.3 and 8.4; RFC 8738)
 
     [Test, Property("RFC", "8555 §8.3"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodHttp01)]
     public async Task A_Name_By_http01()
     {
 
@@ -171,6 +182,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.4"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodHttp01Sixteen)]
     public async Task Sixteen_Names_By_http01()
     {
 
@@ -183,6 +195,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §8.4"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodDns01)]
     public async Task A_Name_By_dns01()
     {
 
@@ -200,6 +213,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.1.3"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodWildcard)]
     public async Task A_Wildcard_By_dns01_And_Its_Base_By_http01()
     {
 
@@ -214,6 +228,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8738 §3"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodIPv4)]
     public async Task An_IPv4_Address_By_http01()
     {
 
@@ -226,6 +241,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8738 §3"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodIPv6)]
     public async Task An_IPv6_Address_By_http01()
     {
 
@@ -244,6 +260,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     [TestCase(ACMEKeyType.RSA_2048,   "RSA", 2048)]
     [TestCase(ACMEKeyType.RSA_4096,   "RSA", 4096)]
     [Property("RFC", "8555 §7.4"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodCertificateKeys)]
     public async Task Every_Kind_Of_Certificate_Key(ACMEKeyType KeyType, String Algorithm, Int32 Size)
     {
 
@@ -271,6 +288,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     [TestCase(50)]
     [TestCase(90)]
     [Property("RFC", "8555 §6.5"), Property("Level", "SHOULD")]
+    [Cell(InteropCells.HermodNonceStorm)]
     public async Task A_Storm_Of_badNonce(Int32 Percent)
     {
 
@@ -323,6 +341,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     [TestCase(2)]
     [TestCase(4)]
     [Property("RFC", "8555 §7.4.2"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodChains)]
     public async Task Chains_Of_Every_Length(Int32 Intermediates)
     {
 
@@ -344,6 +363,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     /// Hermod keeps is the default chain, to root 0.
     /// </summary>
     [Test, Property("RFC", "8555 §7.4.2"), Property("Level", "MAY")]
+    [Cell(InteropCells.HermodAlternateRoots)]
     public async Task With_Alternate_Roots_The_Default_Chain_Is_Kept()
     {
 
@@ -359,6 +379,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.1.3"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodAuthzReuse)]
     public async Task A_Reused_Authorization_Is_Not_Proven_Again()
     {
 
@@ -386,6 +407,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     #region Revocation (RFC 8555, section 7.6)
 
     [Test, Property("RFC", "8555 §7.6"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodRevocation)]
     public async Task A_Revocation_With_A_Reason_Reaches_Pebble()
     {
 
@@ -408,6 +430,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.6"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodAlreadyRevoked)]
     public async Task A_Certificate_Revoked_Again_Is_alreadyRevoked()
     {
 
@@ -430,6 +453,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     #region ARI (RFC 9773)
 
     [Test, Property("RFC", "9773 §4.2"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodARIWindow)]
     public async Task The_Renewal_Window_Lies_In_The_Certificates_Lifetime()
     {
 
@@ -453,6 +477,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "9773 §5"), Property("Level", "SHOULD")]
+    [Cell(InteropCells.HermodARIReplaces)]
     public async Task A_Renewal_Says_What_It_Replaces()
     {
 
@@ -479,6 +504,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     #region The certificate manager
 
     [Test, Property("Level", "—")]
+    [Cell(InteropCells.ManagerFiles)]
     public async Task The_Manager_Keeps_A_Certificate_In_Files()
     {
 
@@ -517,6 +543,7 @@ public abstract class PebbleTests(Func<PebbleBuild> Build) : ServerFixture
     }
 
     [Test, Property("RFC", "9773 §4.2"), Property("Level", "SHOULD")]
+    [Cell(InteropCells.ManagerRenewsByARI)]
     public async Task The_Manager_Renews_When_Pebbles_Window_Is_Due()
     {
 
@@ -561,6 +588,7 @@ public sealed class PebbleUpstreamTests() : PebbleTests(() => PebbleBuild.Upstre
     #region Profiles (draft-ietf-acme-profiles)
 
     [Test, Property("RFC", "draft-ietf-acme-profiles §4"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodProfileIssued)]
     public async Task A_Profile_Is_Asked_For_And_Issued()
     {
 
@@ -583,6 +611,7 @@ public sealed class PebbleUpstreamTests() : PebbleTests(() => PebbleBuild.Upstre
     }
 
     [Test, Property("RFC", "draft-ietf-acme-profiles §4"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodProfileUnknown)]
     public async Task An_Unknown_Profile_Is_Refused_In_Pebbles_Words()
     {
 
@@ -601,6 +630,7 @@ public sealed class PebbleUpstreamTests() : PebbleTests(() => PebbleBuild.Upstre
     /// </summary>
     [Test, Property("RFC", "draft-ietf-acme-profiles §4"), Property("Level", "SHOULD NOT")]
     [Category(TestCategories.KnownIssue), Property("Finding", "C-7")]
+    [Cell(InteropCells.HermodProfileUnadvertised)]
     public async Task No_Profile_Pebble_Does_Not_Advertise_Is_Asked_For()
     {
 

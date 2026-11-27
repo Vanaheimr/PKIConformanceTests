@@ -45,6 +45,14 @@ public sealed class CertbotReferenceTests : ServerFixture
     protected override String[] Tools
         => [ PebbleBuild.Upstream.Binary, PebbleBuild.Upstream.ChallTestSrvBinary, "python3", "openssl", "dig" ];
 
+    /// <inheritdoc/>
+    protected override String   PeerName
+        => CertbotBuild.Debian.Version;
+
+    /// <inheritdoc/>
+    protected override String   Matrix
+        => InteropCells.Reference;
+
     private UInt16 certbotPort;
 
     /// <summary>
@@ -62,7 +70,7 @@ public sealed class CertbotReferenceTests : ServerFixture
                                   $"--standalone --http-01-port {certbotPort} -d {Name} --key-type ecdsa --elliptic-curve secp256r1",
                                   TimeSpan.FromMinutes(3));
 
-        Assert.That(certbot.Live(Name, "fullchain.pem"), Is.Not.Null, $"{Certbot.Version} against {pebble.Name}: {result}\n{Tail(certbot.Log, 30)}");
+        Assert.That(certbot.Live(Name, "fullchain.pem"), Is.Not.Null, $"{CertbotBuild.Debian.Version} against {pebble.Name}: {result}\n{Tail(certbot.Log, 30)}");
 
         return certbot;
 
@@ -110,7 +118,7 @@ public sealed class CertbotReferenceTests : ServerFixture
 
             File.WriteAllText(described,
                               new JsonObject {
-                                  ["certbot"]  = Certbot.Version,
+                                  ["certbot"]  = CertbotBuild.Debian.Version,
                                   ["server"]   = Server.Name,
                                   ["live"]     = reference
                               }.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
@@ -129,6 +137,7 @@ public sealed class CertbotReferenceTests : ServerFixture
     }
 
     [Test, Property("Level", "—")]
+    [Cell(InteropCells.ReferenceFiles)]
     public async Task The_Managers_Files_Are_Named_Moded_And_Encoded_As_Certbots()
     {
 
@@ -161,6 +170,7 @@ public sealed class CertbotReferenceTests : ServerFixture
     /// </summary>
     [Test, Property("RFC", "7468 §3"), Property("Level", "—")]
     [Category(TestCategories.KnownIssue), Property("Finding", "M-4")]
+    [Cell(InteropCells.ReferenceFinalNewline)]
     public async Task The_Managers_Files_End_With_A_Newline_As_Certbots()
     {
 
@@ -181,6 +191,7 @@ public sealed class CertbotReferenceTests : ServerFixture
     #region Taking over what certbot keeps
 
     [Test, Property("Level", "—")]
+    [Cell(InteropCells.ReferenceReads)]
     public void Hermods_ServerCertificateFile_Reads_Certbots_Live_Files()
     {
 
@@ -194,6 +205,7 @@ public sealed class CertbotReferenceTests : ServerFixture
     }
 
     [Test, Property("Level", "—")]
+    [Cell(InteropCells.ReferenceTakesOver)]
     public async Task The_Manager_Takes_Over_What_Certbot_Keeps_And_Orders_Nothing()
     {
 

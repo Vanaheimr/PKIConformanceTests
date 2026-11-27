@@ -1,22 +1,61 @@
 namespace PKIConformance.Core.Peers;
 
 /// <summary>
+/// A build of certbot: Debian's package, or upstream's at its pin, in a venv
+/// of its own beside it (build/peers/pins.env, certbot-requirements.txt).
+/// </summary>
+/// <param name="Tier">"Debian" or "Upstream".</param>
+/// <param name="Executable">The venv's certbot - or null for Debian's, which is started through a launcher of the suite's.</param>
+public sealed record CertbotBuild(String   Tier,
+                                  String?  Executable)
+{
+
+    /// <summary>
+    /// Debian 13's certbot, 4.0.0: profiles, no ARI (4.1.0) and no IP
+    /// identifiers (5.0).
+    /// </summary>
+    public static CertbotBuild Debian { get; } = new ("Debian", null);
+
+    /// <summary>
+    /// Upstream's certbot at its pin, from PyPI: profiles, ARI (the window
+    /// read; no "replaces") and IP identifiers.
+    /// </summary>
+    public static CertbotBuild Upstream
+        => new ("Upstream", $"{Pins.Lib}/certbot-{Pins.Get("CERTBOT_VERSION")}/bin/certbot");
+
+    /// <summary>
+    /// What <c>certbot --version</c> says, and "(Debian)" for Debian's:
+    /// "certbot 4.0.0 (Debian)", "certbot 5.10.0".
+    /// </summary>
+    public String Version
+        => versions.GetOrAdd(Tier, _ => {
+               using var probe = new Certbot(Path.GetTempFileName(), this);
+               var said = probe.Run("--version").StdOut.Trim().Split('\n').LastOrDefault()?.Trim() ?? "";
+               return !said.StartsWith("certbot ", StringComparison.Ordinal)
+                          ? $"certbot does not start: {said}"
+                          : Executable is null ? $"{said} (Debian)" : said;
+           });
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<String, String> versions = new ();
+
+    /// <inheritdoc/>
+    public override String ToString()
+        => Version;
+
+}
+
+
+/// <summary>
 /// certbot (https://certbot.eff.org), the EFF's ACME client in Python, as a
-/// peer: Debian's package, with its config, work and logs directories in the
-/// peer's own.
+/// peer - Debian's or upstream's - with its config, work and logs
+/// directories in the peer's own.
 /// </summary>
 /// <remarks>
-/// <para>
-/// certbot is started through a launcher of the suite's that takes
+/// Debian's certbot is started through a launcher of the suite's that takes
 /// /usr/local off Python's path first: a <c>cryptography</c> installed by pip
 /// there shadows Debian's and certbot dies on import (PLAN.md, "Learned in
 /// phase 0"). What runs is Debian's certbot with Debian's libraries, as on a
-/// clean Debian 13.
-/// </para>
-/// <para>
-/// Debian 13 has certbot 4.0.0: profiles, no ARI (4.1.0) and no IP
-/// identifiers - those cells of the matrix are grey for it.
-/// </para>
+/// clean Debian 13. Upstream's runs from its venv, which sees neither.
 /// </remarks>
 public sealed class Certbot : Peer
 {
@@ -31,20 +70,14 @@ public sealed class Certbot : Peer
                                         sys.exit(main())
                                         """;
 
-    private readonly String launcher;
+    private readonly String command;
 
     #endregion
 
     #region Properties
 
-    /// <summary>What <c>certbot --version</c> says.</summary>
-    public static String Version
-        => version.Value;
-
-    private static readonly Lazy<String> version = new (() => {
-        using var probe = new Certbot(Path.GetTempFileName());
-        return probe.Run("--version").StdOut.Trim().Split('\n').LastOrDefault()?.Trim() ?? "certbot ?";
-    });
+    /// <summary>The build that runs.</summary>
+    public CertbotBuild Build { get; }
 
     #endregion
 
@@ -53,10 +86,18 @@ public sealed class Certbot : Peer
     /// <summary>
     /// A certbot that trusts the given root - a PEM file of this process.
     /// </summary>
-    public Certbot(String TrustedRootFile)
+    /// <param name="TrustedRootFile">The root it trusts.</param>
+    /// <param name="Build">Debian's, by default, or upstream's.</param>
+    public Certbot(String         TrustedRootFile,
+                   CertbotBuild?  Build = null)
+
         : base("certbot", TrustedRootFile)
+
     {
-        launcher = Write("run-certbot.py", LauncherCode);
+        this.Build    = Build ?? CertbotBuild.Debian;
+        this.command  = this.Build.Executable is not null
+                            ? Quote(this.Build.Executable)
+                            : $"python3 {Quote(Write("run-certbot.py", LauncherCode))}";
     }
 
     #endregion
@@ -71,7 +112,7 @@ public sealed class Certbot : Peer
     public Wsl.Result Run(String     Arguments,
                           TimeSpan?  Timeout = null)
 
-        => Shell($"REQUESTS_CA_BUNDLE={Quote(TrustedRoot)} python3 {Quote(launcher)} {Arguments} --non-interactive " +
+        => Shell($"REQUESTS_CA_BUNDLE={Quote(TrustedRoot)} {command} {Arguments} --non-interactive " +
                  $"--config-dir {Quote(WslPathOf("config"))} --work-dir {Quote(WslPathOf("work"))} --logs-dir {Quote(WslPathOf("logs"))}",
                  Timeout ?? TimeSpan.FromSeconds(180));
 

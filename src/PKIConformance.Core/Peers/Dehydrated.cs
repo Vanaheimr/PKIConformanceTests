@@ -17,6 +17,10 @@ public sealed class Dehydrated(String TrustedRootFile) : Peer("dehydrated", Trus
 
     private static readonly Lazy<String> version = new (() => Wsl.Run("dpkg-query -W -f='dehydrated ${Version}' dehydrated", TimeSpan.FromSeconds(15)).StdOut.Trim());
 
+    /// <summary>"dehydrated 0.7.2 (Debian)" - its column of the interop matrix.</summary>
+    public static String Name
+        => $"{Version.Split('-')[0]} (Debian)";
+
     #endregion
 
 

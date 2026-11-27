@@ -39,6 +39,10 @@ public sealed class StepCATests : ServerFixture
     protected override String[] Tools
         => [ "step-ca", "pebble-challtestsrv", "openssl", "dig" ];
 
+    /// <inheritdoc/>
+    protected override String   PeerName
+        => StepCA.Installed;
+
     private StepCA StartStepCA(StepCAOptions? Options = null)
         => Use(StepCA.Start(HTTP01Port, Options));
 
@@ -48,6 +52,7 @@ public sealed class StepCATests : ServerFixture
     #region Accounts (RFC 8555, section 7.3)
 
     [Test, Property("RFC", "8555 §7.3"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodAccount)]
     public async Task An_Account_Is_Opened_With_A_Contact()
     {
 
@@ -68,6 +73,7 @@ public sealed class StepCATests : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.3.1"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodAccountFound)]
     public async Task The_Same_Key_Finds_The_Same_Account()
     {
 
@@ -84,6 +90,7 @@ public sealed class StepCATests : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.3.1"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodAccountNone)]
     public async Task A_Key_Without_An_Account_Finds_None()
     {
 
@@ -99,6 +106,7 @@ public sealed class StepCATests : ServerFixture
     #region http-01 and dns-01 (RFC 8555, sections 8.3 and 8.4; RFC 8738)
 
     [Test, Property("RFC", "8555 §8.3"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodHttp01)]
     public async Task A_Name_By_http01()
     {
 
@@ -115,6 +123,7 @@ public sealed class StepCATests : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.4"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodHttp01Sixteen)]
     public async Task Sixteen_Names_By_http01()
     {
 
@@ -127,6 +136,7 @@ public sealed class StepCATests : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §8.4"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodDns01)]
     public async Task A_Name_By_dns01()
     {
 
@@ -143,6 +153,7 @@ public sealed class StepCATests : ServerFixture
     }
 
     [Test, Property("RFC", "8555 §7.1.3"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodWildcard)]
     public async Task A_Wildcard_By_dns01_And_Its_Base_By_http01()
     {
 
@@ -155,6 +166,7 @@ public sealed class StepCATests : ServerFixture
     }
 
     [Test, Property("RFC", "8738 §3"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodIPv4)]
     public async Task An_IPv4_Address_By_http01()
     {
 
@@ -167,6 +179,7 @@ public sealed class StepCATests : ServerFixture
     }
 
     [Test, Property("RFC", "8738 §3"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodIPv6)]
     public async Task An_IPv6_Address_By_http01()
     {
 
@@ -185,6 +198,7 @@ public sealed class StepCATests : ServerFixture
     [TestCase(ACMEKeyType.RSA_2048,   "RSA", 2048)]
     [TestCase(ACMEKeyType.RSA_4096,   "RSA", 4096)]
     [Property("RFC", "8555 §7.4"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodCertificateKeys)]
     public async Task Every_Kind_Of_Certificate_Key(ACMEKeyType KeyType, String Algorithm, Int32 Size)
     {
 
@@ -202,6 +216,7 @@ public sealed class StepCATests : ServerFixture
     #region Revocation (RFC 8555, section 7.6)
 
     [Test, Property("RFC", "8555 §7.6"), Property("Level", "MUST")]
+    [Cell(InteropCells.HermodRevocation)]
     public async Task A_Revocation_With_A_Reason_Is_In_The_CRL()
     {
 
@@ -239,6 +254,7 @@ public sealed class StepCATests : ServerFixture
     #region The certificate manager
 
     [Test, Property("Level", "—")]
+    [Cell(InteropCells.ManagerFiles)]
     public async Task The_Manager_Keeps_A_Certificate_In_Files()
     {
 
@@ -270,6 +286,7 @@ public sealed class StepCATests : ServerFixture
     /// third of the certificate's lifetime is left.
     /// </summary>
     [Test, Property("Level", "—")]
+    [Cell(InteropCells.ManagerRenewsByThird)]
     public async Task Without_A_Window_The_Manager_Renews_By_The_Lifetime()
     {
 

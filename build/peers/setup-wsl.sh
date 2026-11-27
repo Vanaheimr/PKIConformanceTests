@@ -13,7 +13,9 @@
 # challenge test server, BIND for dns-01 by RFC 2136, dehydrated, uacme,
 # openssl and curl. From upstream, pinned in pins.env: lego, whose Debian
 # package is three years behind; step-ca, which Debian does not have; and
-# Pebble once more, beside Debian's, at its current version.
+# Pebble, certbot and acme.sh once more, beside Debian's, at their current
+# versions - certbot in a venv of its own from PyPI, every package by its
+# hash (certbot-requirements.txt), acme.sh as a clone at its release tag.
 #
 # Boulder only with --with-boulder or --only-boulder: its source at the
 # pinned tag, and the images of its compose stack pulled - several GB, for
@@ -30,13 +32,16 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 . "$here/pins.env"
 
-# Where the upstream peers that are no single binary on the PATH go - Pebble
-# beside Debian's, Boulder's source - as the suite looks for them (Peers/).
+# Where the upstream peers that are no single binary on the PATH go -
+# Pebble, certbot and acme.sh beside Debian's, Boulder's source - as the
+# suite looks for them (Peers/).
 LIB=/usr/local/lib/pkiconformance
 PEBBLE_DIR="$LIB/pebble-$PEBBLE_VERSION"
+CERTBOT_DIR="$LIB/certbot-$CERTBOT_VERSION"
+ACMESH_DIR="$LIB/acme.sh-$ACMESH_VERSION"
 BOULDER_DIR="$LIB/boulder-$BOULDER_VERSION"
 
-APT_PACKAGES="curl ca-certificates openssl rsync socat certbot python3-certbot-dns-rfc2136 acme.sh pebble bind9 bind9-dnsutils dehydrated uacme"
+APT_PACKAGES="curl ca-certificates git openssl rsync socat python3-venv certbot python3-certbot-dns-rfc2136 acme.sh pebble bind9 bind9-dnsutils dehydrated uacme"
 
 version_of() {
     case "$1" in
@@ -87,6 +92,18 @@ check() {
             missing=$((missing + 1))
         fi
     done
+    if "$CERTBOT_DIR/bin/certbot" --version 2>/dev/null | grep -q "certbot $CERTBOT_VERSION"; then
+        printf '  %-20s %s\n' "certbot $CERTBOT_VERSION" "$CERTBOT_DIR/bin/certbot"
+    else
+        printf '  %-20s MISSING\n' "certbot $CERTBOT_VERSION"
+        missing=$((missing + 1))
+    fi
+    if [ "$(git -C "$ACMESH_DIR" rev-parse HEAD 2>/dev/null)" = "$ACMESH_COMMIT" ]; then
+        printf '  %-20s %s\n' "acme.sh $ACMESH_VERSION" "$ACMESH_DIR/acme.sh"
+    else
+        printf '  %-20s MISSING\n' "acme.sh $ACMESH_VERSION"
+        missing=$((missing + 1))
+    fi
     # Boulder is the Docker lane's alone: its absence fails no check.
     if [ -d "$BOULDER_DIR/.git" ]; then
         printf '  %-20s %s at %s\n' "boulder" "$BOULDER_VERSION" "$(git -C "$BOULDER_DIR" rev-parse --short HEAD 2>/dev/null)"
@@ -179,6 +196,26 @@ if [ ! -x "$PEBBLE_DIR/pebble" ] || [ ! -x "$PEBBLE_DIR/pebble-challtestsrv" ]; 
     fetch "https://github.com/letsencrypt/pebble/releases/download/v${PEBBLE_VERSION}/pebble-challtestsrv-linux-amd64.tar.gz" "$PEBBLE_CHALLTESTSRV_SHA256" "$tmp/pebble"
     install -m 0755 "$(find "$tmp/pebble" -type f -name pebble | head -n1)"              "$PEBBLE_DIR/pebble"
     install -m 0755 "$(find "$tmp/pebble" -type f -name pebble-challtestsrv | head -n1)" "$PEBBLE_DIR/pebble-challtestsrv"
+fi
+
+# certbot in a venv: none of Debian's Python and none of /usr/local's, every
+# package by its hash.
+if ! "$CERTBOT_DIR/bin/certbot" --version 2>/dev/null | grep -q "certbot $CERTBOT_VERSION"; then
+    rm -rf "$CERTBOT_DIR"
+    mkdir -p "$LIB"
+    python3 -m venv "$CERTBOT_DIR"
+    "$CERTBOT_DIR/bin/pip" install -q --disable-pip-version-check --no-cache-dir --require-hashes -r "$here/certbot-requirements.txt"
+fi
+
+if [ "$(git -C "$ACMESH_DIR" rev-parse HEAD 2>/dev/null)" != "$ACMESH_COMMIT" ]; then
+    rm -rf "$ACMESH_DIR"
+    mkdir -p "$LIB"
+    git -c advice.detachedHead=false clone -q --depth 1 --branch "$ACMESH_VERSION" https://github.com/acmesh-official/acme.sh "$ACMESH_DIR"
+    commit=$(git -C "$ACMESH_DIR" rev-parse HEAD)
+    if [ "$commit" != "$ACMESH_COMMIT" ]; then
+        echo "acme.sh $ACMESH_VERSION is $commit, not the pinned $ACMESH_COMMIT" >&2
+        exit 1
+    fi
 fi
 
 if [ $with_boulder -eq 1 ]; then

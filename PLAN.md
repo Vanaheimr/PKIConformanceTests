@@ -43,8 +43,10 @@ Status legend: ✅ done · 🔶 in progress · ⬜ planned · 📋 optional / do
 4. **Missing features are ToDos, not findings** (§2.4). Each ToDo gets tracker
    tests tagged `ToDo` that go green the day it is implemented; a finding is
    reserved for something implemented that deviates from the RFC.
-5. Open: Let's Encrypt staging (needs a public name and a DNS API), and whether
-   certbot and acme.sh gate from Debian's packages or from pinned upstream.
+5. Open: Let's Encrypt staging (needs a public name and a DNS API).
+6. **certbot and acme.sh gate in both tiers** (decided 2026-11-27): Debian's
+   packages and the pinned upstream versions beside them, as Pebble 2.6.0
+   and 2.10.3 do - upstream has the cells Debian's lack (§6).
 
 ### Learned in phase 0
 
@@ -206,6 +208,34 @@ Status legend: ✅ done · 🔶 in progress · ⬜ planned · 📋 optional / do
   2.10.3 and Boulder do, so the manager's renewal by ARI is a cell of all
   three; step-ca has no ARI, and its cell is the manager's own third of the
   lifetime.
+
+### Learned in phase 6
+
+- **A TRX file keeps a test's output, and nothing else of NUnit's**:
+  neither categories nor properties. So every interop test names its cell
+  by `[Cell(InteropCells.…)]`, and its fixture's SetUp writes a line of it
+  into the test's output - matrix, peer and version, the PKI's or Hermod's
+  commit, the cell, the finding or ToDo of a red one - which `InteropReport`
+  reads back. A fixture that skips in its OneTimeSetUp never reaches that
+  SetUp: its tests are counted as "not attributed", never dropped.
+- **acme.sh deletes a certificate it revoked itself**, and then has nothing
+  to ask the window of ARI for: its renewal by the window is tested with a
+  certificate the CA revoked - by the certificate's own key, out of band, as
+  in the incident ARI is for.
+- **certbot asks ARI first and OCSP second**, and renews for either: its
+  test of the window is green only where its log shows the renewal-info
+  asked and no renewal for a revocation.
+- **certbot from PyPI by its hashes**: the venv's 19 packages pinned in
+  `certbot-requirements.txt` with every SHA-256 PyPI publishes for each
+  version (as `pip-compile --generate-hashes` would), so that the one file
+  installs on any Python and platform the wheels exist for.
+- **WSL's bash reads the `|` of a `dotnet test --filter` as a pipe** when
+  the command comes through `wsl` itself: such a run goes into a script.
+- **Boulder's identifier policy forbids addresses of its own "public"
+  network**: 64.112.117.66 and .68 to .71 (`test/ident-policy.yaml`). The
+  forwarder's address of phase 5, drawn from .10 to .120, drew .68 in the
+  first Boulder run of phase 6 - "forbidden by policy", a red test of the
+  bench, not of Hermod. It is drawn below .64 now.
 
 ---
 
@@ -462,7 +492,7 @@ one type.
 | EAB | kid and MAC as given, padding tolerated |
 | Manager | file layout and modes compared with what **certbot itself** writes (`live/`, `archive/`, `cert.pem`, `chain.pem`, `fullchain.pem`, `privkey.pem`) — the reference comes from a real certbot run against Pebble (§4.6) and is kept as a fixture |
 
-### 4.5 Interop A (`PKIInterop.ACMEClients.Tests`) — real clients → PKI 🔶 122
+### 4.5 Interop A (`PKIInterop.ACMEClients.Tests`) — real clients → PKI 🔶 178
 
 *Phase 4, 2026-11-27, natively in WSL: 122 tests - 111 of the matrix, the 6
 account tests of lego of phase 0, 5 of the bench itself - 116 green, 6 red,
@@ -470,6 +500,17 @@ all of them dns-01 at V-1. No new finding: every client of the five takes
 every cell of the PKI it has, and the refusals reach it in the RFC's words.
 V-1 is seen three times over, by three DNS plugins of other hands: their
 records arrive in BIND, and the PKI never asks.*
+
+*Phase 6, 2026-11-27: 178 tests - certbot and acme.sh in both tiers,
+Debian's and the pinned upstream's beside it - 168 green, 10 red, all of
+them dns-01 at V-1 again, now by five versions of three plugins. The cells
+only upstream has are green: certbot 5.10.0 orders addresses of both
+families and renews of its own when the PKI's window of ARI is due; acme.sh
+3.1.7 asks for a profile, says what a renewal replaces, and renews when the
+window is due. No new finding. What the run gave cell by cell, generated:
+[docs/INTEROP-MATRIX.md](docs/INTEROP-MATRIX.md). There a cell is a test of its own: the
+account every other test opens on its way is "–" for all but lego, whose
+account tests are the only ones of that cell.*
 
 The PKI runs in-process, a server per test, its `http01Port` the port of the
 client's own web server or of the bench's web server of a webroot, its
@@ -485,24 +526,25 @@ not built: it would prove nothing BIND does not, until V-1 is fixed.
 ✅ green · ❌ red, at a finding · — the client's version lacks it (no test,
 principle 7) · ⬜ not built yet
 
-| Feature | certbot 4.0.0 | **lego 5.7.0** | acme.sh 3.1.1 | dehydrated 0.7.2 | uacme 1.7.6 |
-|---|---|---|---|---|---|
-| Account: new + ToS + contact | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Account: EAB | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Account: new contact / deactivate | ✅ / ✅ | — / — | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ |
-| Account: key rollover (§7.3.5) | — | ✅ | — | — | ✅ |
-| Account key types | ⬜ | ✅ EC256/384, RSA2048-4096; ML-DSA refused | ✅ ec-256/384, 2048 | ⬜ | ✅ EC, RSA |
-| http-01 own web server / webroot | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | — / ✅ | — / ✅ |
-| dns-01 RFC 2136: record written / certificate | ✅ / ❌ V-1 | ✅ / ❌ V-1 | ✅ / ❌ V-1 | ⬜ hook | ⬜ hook |
-| Wildcard / 16 SANs | ❌ V-1 / ✅ | ❌ V-1 / ✅ | ❌ V-1 / ✅ | ⬜ / ✅ | ⬜ / ✅ |
-| IP identifiers v4 / v6 (RFC 8738) | — | ✅ / ✅ | ✅ / ✅ | — (sends an address as "dns": refused ✅) | ✅ / ✅ |
-| Own CSR | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Certificate keys ec256/ec384/rsa2048/3072/4096 | ✅ | ✅ | ✅ | ✅ (no 3072) | ✅ |
-| Profiles (preferred / required) | ✅ / ✅ | ✅ | — | — | — |
-| Renewal forced / `replaces` (RFC 9773) | ✅ / — | ✅ / ✅ | ✅ / — | ✅ / — | ✅, window read / — |
-| Revoke by account, reason, in the CRL / by certificate key | ✅ / ✅ | ✅ / — | ✅ / — | ✅ / ⬜ | ✅ / ✅ |
-| tls-alpn-01 only → clean "no challenge for it" | — | ✅ | ✅ | ⬜ | ⬜ |
-| Refused: `rejectedIdentifier` / `externalAccountRequired` / wrong answer | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ | ✅ / ⬜ / ✅ | ✅ / ✅ / ✅ |
+| Feature | certbot 4.0.0 | **certbot 5.10.0** | **lego 5.7.0** | acme.sh 3.1.1 | **acme.sh 3.1.7** | dehydrated 0.7.2 | uacme 1.7.6 |
+|---|---|---|---|---|---|---|---|
+| Account: new + ToS + contact | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Account: EAB | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Account: new contact / deactivate | ✅ / ✅ | ✅ / ✅ | — / — | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ |
+| Account: key rollover (§7.3.5) | — | — | ✅ | — | — | — | ✅ |
+| Account key types | ⬜ | ⬜ | ✅ EC256/384, RSA2048-4096; ML-DSA refused | ✅ ec-256/384, 2048 | ✅ ec-256/384, 2048 | ⬜ | ✅ EC, RSA |
+| http-01 own web server / webroot | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | — / ✅ | — / ✅ |
+| dns-01 RFC 2136: record written / certificate | ✅ / ❌ V-1 | ✅ / ❌ V-1 | ✅ / ❌ V-1 | ✅ / ❌ V-1 | ✅ / ❌ V-1 | ⬜ hook | ⬜ hook |
+| Wildcard / 16 SANs | ❌ V-1 / ✅ | ❌ V-1 / ✅ | ❌ V-1 / ✅ | ❌ V-1 / ✅ | ❌ V-1 / ✅ | ⬜ / ✅ | ⬜ / ✅ |
+| IP identifiers v4 / v6 (RFC 8738) | — | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | — (sends an address as "dns": refused ✅) | ✅ / ✅ |
+| Own CSR | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Certificate keys ec256/ec384/rsa2048/3072/4096 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (no 3072) | ✅ |
+| Profiles (preferred / required) | ✅ / ✅ | ✅ / ✅ | ✅ | — | ✅ | — | — |
+| Renewal forced / `replaces` (RFC 9773) | ✅ / — | ✅ / — | ✅ / ✅ | ✅ / — | ✅ / ✅ | ✅ / — | ✅, window read / — |
+| Renewal of its own when the window of ARI is due (RFC 9773, §4.2) | — | ✅ | ⬜ | — | ✅ | — | ⬜ |
+| Revoke by account, reason, in the CRL / by certificate key | ✅ / ✅ | ✅ / ✅ | ✅ / — | ✅ / — | ✅ / — | ✅ / ⬜ | ✅ / ✅ |
+| tls-alpn-01 only → clean "no challenge for it" | — | — | ✅ | ✅ | ✅ | ⬜ | ⬜ |
+| Refused: `rejectedIdentifier` / `externalAccountRequired` / wrong answer | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ | ✅ / ⬜ / ✅ | ✅ / ✅ / ✅ |
 
 **lego is a first-class peer**: it implements the most of the extensions the
 PKI has (IP identifiers, ARI, profiles, EAB, RFC 2136, key rollover) and
@@ -525,7 +567,8 @@ BIND's log - is the evidence of a red cell.
 matrix, 4 of the reference run of certbot, 7 of the bench itself - 105
 green, 3 red: C-7 against Pebble 2.10.3 and against Boulder, and M-4, the
 one new finding. Hermod's client takes every cell of the four servers it
-has.*
+has. What a run gives cell by cell, generated:
+[docs/INTEROP-MATRIX.md](docs/INTEROP-MATRIX.md).*
 
 Every test starts its server - Boulder once for the fixture, it takes
 minutes - with a name server of its own that answers every name with the
@@ -592,7 +635,9 @@ build/
   CommonTestSettings.props          net11.0, NUnit 5, analyzers (as DNS/SMTP/NTS)
   test-in-wsl.sh                    the suite natively in WSL, from a copy in the Linux file system
   bench-namespace.sh                a run where the bench's names resolve to the loopback (no root)
-  peers/                            setup-wsl.sh (--check, --with-boulder, --only-boulder), pins.env (versions + SHA-256)
+  peers/                            setup-wsl.sh (--check, --with-boulder, --only-boulder), pins.env (versions + SHA-256),
+                                    certbot-requirements.txt (certbot's venv, every package by its hashes)
+  closable.sh                       which KnownIssue and ToDo tests pass: the nightly's summary
 src/
   PKIConformance.Core/
     RawACME/                        JWS, JWK, thumbprint, EAB, key change, CSR reader, ARI id
@@ -603,16 +648,18 @@ src/
                                     Pebble, StepCA, Boulder, ChallTestSrv (IACMEServerPeer, IChallengeDNS),
                                     RecordingHandler, WireForm (the recorded exchanges judged by RawACME)
     Wsl.cs  TestEnvironment.cs  TestCategories.cs  OpenSSL.cs  BenchNames.cs  Pins.cs  Fixtures.cs
+    InteropCells.cs  InteropMatrix.cs  the cells of the matrices; a test's [Cell], written into its output
 conformance/
   PKIConformance.ACME.Codec.Tests/
   PKIConformance.ACME.Server.Tests/
   PKIConformance.ACME.Validation.Tests/
   PKIConformance.ACME.Client.Tests/
 interop/
-  PKIInterop.ACMEClients.Tests/     certbot, lego, acme.sh, dehydrated, uacme → PKI
+  PKIInterop.ACMEClients.Tests/     certbot and acme.sh (Debian's and upstream's), lego, dehydrated, uacme → PKI
   PKIInterop.ACMEServers.Tests/     Hermod → Pebble, step-ca, Boulder
   PKIInterop.PublicCAs.Tests/       Let's Encrypt staging (Online, opt-in)
-InteropReport/                      .trx → docs/INTEROP-MATRIX.md (as in SSH)
+InteropReport/                      .trx → docs/INTEROP-MATRIX.md, by the cells the tests wrote (InteropCells.cs linked)
+docs/INTEROP-MATRIX.md              the matrices of the last run, generated
 fixtures/                           certbot/live-layout.json: what certbot writes into live/
 libs/  Styx  Hermod  Norn  Urdr  PKI  WWCP_Node  WWCP_Core
 ```
@@ -643,16 +690,20 @@ enrolment protocols (EST, RFC 7030) later, without renaming anything.
 - **Peers** in three tiers, following NTS/SSH. Debian 13.7 candidates, as
   checked on 2026-11-26: certbot 4.0.0 (+ dns-rfc2136 4.0.0), lego **4.9.1**,
   acme.sh 3.1.1, pebble 2.6.0, dehydrated 0.7.2, uacme 1.7.6, bind9 9.20.
-  Pinned upstream since phase 5: lego 5.7.0, step-ca 0.30.2, Pebble 2.10.3
-  (beside Debian's 2.6.0, both tested), Boulder v0.20261117.0.
+  Pinned upstream: lego 5.7.0, step-ca 0.30.2, Pebble 2.10.3, Boulder
+  v0.20261117.0 (phase 5); certbot 5.10.0 and acme.sh 3.1.7 (phase 6).
   1. *Debian 13 packages* (`apt`) — gating in the nightly for certbot,
      acme.sh, Pebble, dehydrated, uacme and BIND.
-  2. *Upstream, pinned* (`build/peers/pins.env` with version + SHA-256): lego
-     release binary (v5), certbot in a venv from PyPI with hashes, acme.sh at
-     a tag, Pebble and step-ca release binaries. **lego gates from this tier
-     from the start**: Debian's 4.9.1 is from 2022 and has neither ARI nor
-     profiles. certbot 4.0.0 has profiles but no ARI (that came in 4.1.0), so
-     the ARI cells of certbot also need this tier.
+  2. *Upstream, pinned* (`build/peers/pins.env` with version + SHA-256, or a
+     tag and its commit): lego and step-ca release binaries, Pebble's beside
+     Debian's, certbot in a venv from PyPI with every package by its hash
+     (`certbot-requirements.txt`), acme.sh as a clone at its tag - all under
+     `/usr/local/lib/pkiconformance`. **Gating as well** (§0.6), in the same
+     lane: lego only from here (Debian's 4.9.1 of 2022 has neither ARI nor
+     profiles); certbot, acme.sh and Pebble from both, each test class once
+     per tier, the cells only upstream has in its upstream class - certbot
+     5.10.0 reads ARI (4.1.0) and orders addresses (5.0), acme.sh 3.1.7 reads
+     ARI, sends "replaces" and asks for profiles.
   3. *Docker*: Boulder's compose stack at a pinned tag and commit, the
      images of its tools, Vitess and Sunlight at the tags of its CI; the
      nightly's `boulder` lane, `Docker`.
@@ -678,7 +729,7 @@ enrolment protocols (EST, RFC 7030) later, without renaming anything.
 | 3 ✅ | *Done 2026-11-26: 166 client tests, round 2 of the findings: C-1 to C-11 and M-1 to M-3, 14 in all; a tracker for every client ToDo.* `ScriptedACMEServer`, `BenchCA`, `BenchClock`; Client conformance | ~80 tests; first findings round for Hermod |
 | 4 🔶 | *2026-11-27: 122 interop tests natively in WSL, 116 green, the 6 red ones dns-01 at V-1; no new finding. Not built yet: dns-01 by the hooks of dehydrated and uacme, certbot's account keys, dehydrated's revocation by key, tls-alpn-01 of dehydrated and uacme.* Interop A: certbot, acme.sh, dehydrated, uacme (Debian) and **lego** (pinned upstream v5) → PKI; BIND/RFC 2136; `bench-namespace.sh` | matrix §4.5 filled except the ARI cells of certbot |
 | 5 ✅ | *Done 2026-11-27: 108 interop tests natively in WSL, Boulder in Docker; round 3 of the findings: M-4; C-7 seen by Pebble and Boulder. Not built yet: EAB of step-ca, IPv6 against Boulder, authorization reuse of step-ca and Boulder.* Interop B: Hermod → Pebble 2.6.0 and 2.10.3 (+ nonce storm, chains, alternate roots), step-ca, Boulder in Docker; certbot-vs-Pebble reference layout, kept as a fixture | matrix §4.6 filled |
-| 6 | Upstream tier with pins; `InteropReport` → `docs/INTEROP-MATRIX.md`; nightly lanes incl. `against-submodule-masters` | matrix generated, nightly green |
+| 6 🔶 | *2026-11-27: certbot 5.10.0 and acme.sh 3.1.7 pinned beside Debian's, both tiers gating; the cells of certbot's ARI and addresses and of acme.sh's ARI, "replaces" and profiles filled; every interop test declares its cell, `InteropReport` renders `docs/INTEROP-MATRIX.md`; the nightly with the red cells, a `matrix` job and `against-submodule-masters`. Not yet: a nightly run.* Upstream tier with pins; `InteropReport` → `docs/INTEROP-MATRIX.md`; nightly lanes incl. `against-submodule-masters` | matrix generated, nightly green |
 | 7 | Optional: Posh-ACME and win-acme on the **Windows** leg (no WSL on hosted runners — real interop there too), Python `acme` driver for what no CLI does (key change, authz deactivation), Let's Encrypt staging, mutation sweep (`MUTATION.md`), JWS/JSON fuzzing of the PKI | as far as useful |
 
 ---
@@ -690,15 +741,35 @@ dotnet test PKIConformanceTests.slnx --filter "TestCategory!=Online&TestCategory
 dotnet test PKIConformanceTests.slnx --filter "TestCategory=WSL&TestCategory!=KnownIssue&TestCategory!=ToDo"
 dotnet test interop/PKIInterop.ACMEServers.Tests --filter "TestCategory=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
 dotnet test PKIConformanceTests.slnx --filter "TestCategory=KnownIssue|TestCategory=ToDo"
+dotnet run --project InteropReport -- <the TRX files of one run, or their directory>
 ```
 
 `build/peers/setup-wsl.sh --check` lists what is missing in WSL and how to get it.
 
+**The matrix** - `docs/INTEROP-MATRIX.md` - is generated, never written: every
+interop test names its cell (`[Cell(InteropCells.…)]`), and its fixture's
+SetUp writes a line of it into the test's output - the matrix, the peer and
+its version, the PKI's or Hermod's commit, the cell, the finding or ToDo of
+a red one - because a TRX file keeps a test's output but not its categories
+or properties. `InteropReport` reads the lines out of the TRX files: a table
+per matrix, its rows in the order of `InteropCells`, a column per peer; a red
+test without a finding or a ToDo makes its exit code 1. The copy in the
+repository is of a run natively in WSL and Boulder's in Docker, the red
+cells included.
+
 CI as in the siblings: `ci.yml` on `windows-latest` and `debian:13` with the
-offline set; `nightly.yml` with the WSL set natively on Debian (red on any
-skip), the Docker lane `boulder` on the runner itself (red on any skip as well;
-Boulder by `setup-wsl.sh --only-boulder`), the upstream tier, `against-submodule-masters`
-(Hermod and PKI at master), and `KnownIssue` to report what now passes.
+offline set. `nightly.yml`:
+
+- `peers` - the WSL set natively on Debian, both tiers of peers, red on any
+  skip; then KnownIssue and ToDo, informational, and which of them pass
+  (`build/closable.sh`) in the job's summary;
+- `boulder` - the Docker lane on the runner itself (Boulder by
+  `setup-wsl.sh --only-boulder`), red on any skip, and its KnownIssue;
+- `matrix` - `InteropReport` over the TRX files of both, into the job's
+  summary and an artifact; red at an unexplained red test;
+- `against-submodule-masters` - every submodule at its master, how many
+  commits past its pin and which, the offline set and the WSL set red on any
+  failure or skip, and which KnownIssue and ToDo pass there.
 
 ---
 
@@ -719,10 +790,7 @@ RFC ambiguity — the last goes to "Interpretations" with the reading chosen.
 
 ## 10. Open decisions
 
-Decided on 2026-11-26: see §0. Still open:
+Decided on 2026-11-26 and 2026-11-27: see §0. Still open:
 
 1. **Let's Encrypt staging**: is there a public test name with a DNS API whose
    credentials could live in a CI secret? Without one, Layer 4 stays manual.
-2. **Peer tiers**: lego gates from the pinned upstream tier anyway (§6). Should
-   certbot and acme.sh do the same, or do their Debian packages gate and
-   upstream stays informational?

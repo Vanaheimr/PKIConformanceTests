@@ -97,9 +97,11 @@ public sealed class Boulder : IDisposable
     /// The forwarder's address on Boulder's "public" network: what every name
     /// resolves to, and the address a test of an IP identifier asks for - one
     /// of its own for every start, as Boulder allows two certificates of the
-    /// same identifiers in three hours.
+    /// same identifiers in three hours. Below .64: Boulder's
+    /// test/ident-policy.yaml refuses .66 and .68 to .71 as "forbidden by
+    /// policy", and its own containers are at .122 and above.
     /// </summary>
-    public String         ForwarderIP  { get; } = $"{PublicNet}.{System.Security.Cryptography.RandomNumberGenerator.GetInt32(10, 121)}";
+    public String         ForwarderIP  { get; } = $"{PublicNet}.{System.Security.Cryptography.RandomNumberGenerator.GetInt32(10, 64)}";
 
     /// <summary>The URL of its directory: its WFE, published on the host.</summary>
     public Uri            DirectoryURL

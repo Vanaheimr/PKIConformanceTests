@@ -23,7 +23,9 @@ namespace PKIInterop.ACMEClients.Tests;
 public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
 {
 
-    protected override String[] Tools => [ "dehydrated", "curl", "openssl" ];
+    protected override String[] Tools    => [ "dehydrated", "curl", "openssl" ];
+
+    protected override String   PeerName => Dehydrated.Name;
 
     private Dehydrated NewDehydrated(String KeyAlgorithm = "prime256v1", Int32 KeySize = 2048, String Email = "dehydrated@acme.test", String? More = null)
     {
@@ -49,6 +51,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §8.3")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.Http01Webroot)]
     public async Task Dehydrated_Gets_A_Certificate_By_http01()
     {
 
@@ -71,6 +74,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8738 §3; 8555 §9.7.7")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RefusedAddressAsName)]
     public async Task An_Address_Ordered_As_A_DNS_Name_Is_Refused()
     {
 
@@ -93,6 +97,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [TestCase("rsa",        4096, "RSA", 4096)]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.CertificateKeys)]
     public async Task Dehydrated_Gets_A_Certificate_Of_The_Key_Asked_For(String KeyAlgorithm, Int32 KeySize, String Algorithm, Int32 Size)
     {
 
@@ -112,6 +117,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.SixteenNames)]
     public async Task Dehydrated_Gets_A_Certificate_Of_Sixteen_Names()
     {
 
@@ -133,6 +139,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.OwnCSR)]
     public async Task Dehydrated_Gets_A_Certificate_For_Its_Own_CSR()
     {
 
@@ -158,6 +165,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountEAB)]
     public async Task Dehydrated_Opens_An_Account_By_An_External_Account_Binding()
     {
 
@@ -182,6 +190,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.2")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountContact)]
     public async Task Dehydrated_Updates_The_Contact_Of_Its_Account()
     {
 
@@ -207,6 +216,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.6")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountDeactivated)]
     public async Task Dehydrated_Deactivates_Its_Account()
     {
 
@@ -235,6 +245,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RenewalForced)]
     public async Task Dehydrated_Renews_When_Forced()
     {
 
@@ -257,6 +268,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.6")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RevokedByAccount)]
     public async Task Dehydrated_Revokes_Its_Certificate()
     {
 
@@ -285,6 +297,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4, §6.7")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RefusedName)]
     public async Task Dehydrated_Is_Told_Of_A_Name_Not_Signed_For()
     {
 
@@ -305,6 +318,7 @@ public class DehydratedTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §8.3, §7.5.1")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RefusedWrongAnswer)]
     public async Task Dehydrated_Is_Told_Of_A_Wrong_Answer()
     {
 

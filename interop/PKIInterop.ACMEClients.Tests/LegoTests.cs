@@ -24,7 +24,9 @@ namespace PKIInterop.ACMEClients.Tests;
 public class LegoTests(String ServerName) : InteropFixture(ServerName)
 {
 
-    protected override String[] Tools => [ "lego", "openssl" ];
+    protected override String[] Tools    => [ "lego", "openssl" ];
+
+    protected override String   PeerName => Lego.Name;
 
     private Lego NewLego()
         => Keep(new Lego(Server.TLS.RootFile));
@@ -52,6 +54,10 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [TestCase("webroot",    BenchNames.WWW)]
     [Property("RFC", "8555 §8.3; 8738")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.Http01Webroot, Argument = "webroot")]
+    [Cell(InteropCells.IPv4, Argument = "127.0.0.1")]
+    [Cell(InteropCells.IPv6, Argument = "::1")]
+    [Cell(InteropCells.Http01OwnServer)]
     public async Task Lego_Gets_A_Certificate_By_http01(String Mode, String Name)
     {
 
@@ -78,6 +84,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [TestCase("RSA4096", "RSA", 4096)]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.CertificateKeys)]
     public async Task Lego_Gets_A_Certificate_Of_The_Key_Asked_For(String KeyType, String Algorithm, Int32 Size)
     {
 
@@ -96,6 +103,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.SixteenNames)]
     public async Task Lego_Gets_A_Certificate_Of_Sixteen_Names()
     {
 
@@ -116,6 +124,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.OwnCSR)]
     public async Task Lego_Gets_A_Certificate_For_Its_Own_CSR()
     {
 
@@ -140,6 +149,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountEAB)]
     public async Task Lego_Opens_An_Account_By_An_External_Account_Binding()
     {
 
@@ -164,6 +174,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.4")]
     [Property("Level", "SHOULD")]
+    [Cell(InteropCells.RefusedNoEAB)]
     public async Task Lego_Is_Told_An_External_Account_Binding_Is_Required()
     {
 
@@ -183,6 +194,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.5")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountKeyRollover)]
     public async Task Lego_Rolls_Its_Account_Key_Over()
     {
 
@@ -216,6 +228,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "draft-ietf-acme-profiles-03 §4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.Profiles)]
     public async Task Lego_Gets_A_Certificate_Of_The_Profile_Asked_For()
     {
 
@@ -237,6 +250,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "9773 §5")]
     [Property("Level", "SHOULD")]
+    [Cell(InteropCells.RenewalReplaces)]
     public async Task Lego_Renews_Saying_Which_Certificate_It_Replaces()
     {
 
@@ -260,6 +274,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.6")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RevokedByAccount)]
     public async Task Lego_Revokes_Its_Certificate_For_A_Reason()
     {
 
@@ -287,6 +302,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4, §6.7")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RefusedName)]
     public async Task Lego_Is_Told_Of_A_Name_Not_Signed_For()
     {
 
@@ -306,6 +322,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §8.3, §7.5.1")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RefusedWrongAnswer)]
     public async Task Lego_Is_Told_Of_A_Wrong_Answer()
     {
 
@@ -326,6 +343,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8737; 8555 §7.5")]
     [Property("Level", "SHOULD")]
+    [Cell(InteropCells.TlsAlpn01Alone)]
     public async Task Lego_With_tls_alpn_01_Alone_Is_Told_There_Is_No_Challenge_For_It()
     {
 
@@ -356,6 +374,7 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §8.4; 2136; 8945")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.Dns01Record)]
     public async Task Lego_Writes_Its_dns01_Record_By_RFC_2136()
     {
 
@@ -378,6 +397,8 @@ public class LegoTests(String ServerName) : InteropFixture(ServerName)
     [Property("Level", "MUST")]
     [Category(TestCategories.KnownIssue)]
     [Property("Finding", "V-1")]
+    [Cell(InteropCells.Wildcard, Argument = "*.acme.test")]
+    [Cell(InteropCells.Dns01Certificate)]
     public async Task Lego_Gets_A_Certificate_By_dns01(String Name)
     {
 

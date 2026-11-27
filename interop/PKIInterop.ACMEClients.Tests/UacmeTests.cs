@@ -27,7 +27,9 @@ namespace PKIInterop.ACMEClients.Tests;
 public class UacmeTests(String ServerName) : InteropFixture(ServerName)
 {
 
-    protected override String[] Tools => [ "uacme", "openssl" ];
+    protected override String[] Tools    => [ "uacme", "openssl" ];
+
+    protected override String   PeerName => Uacme.Name;
 
     private async Task<Uacme> StartUacmeAsync(ACMEServerOptions? Options = null)
     {
@@ -56,6 +58,9 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [TestCase(BenchNames.WWW)]
     [Property("RFC", "8555 §8.3; 8738")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.IPv4, Argument = "127.0.0.1")]
+    [Cell(InteropCells.IPv6, Argument = "::1")]
+    [Cell(InteropCells.Http01Webroot)]
     public async Task Uacme_Gets_A_Certificate_By_http01(String Name)
     {
 
@@ -80,6 +85,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [TestCase("RSA", 4096)]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.CertificateKeys)]
     public async Task Uacme_Gets_A_Certificate_Of_The_Key_Asked_For(String Type, Int32 Bits)
     {
 
@@ -98,6 +104,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [TestCase("RSA", 2048, "2048")]
     [Property("RFC", "8555 §6.2, §7.3")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountKeys)]
     public async Task Uacme_Opens_An_Account_Of_The_Key_Asked_For(String Type, Int32 Bits, String Detail)
     {
 
@@ -120,6 +127,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.SixteenNames)]
     public async Task Uacme_Gets_A_Certificate_Of_Sixteen_Names()
     {
 
@@ -139,6 +147,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.OwnCSR)]
     public async Task Uacme_Gets_A_Certificate_For_Its_Own_CSR()
     {
 
@@ -163,6 +172,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountEAB)]
     public async Task Uacme_Opens_An_Account_By_An_External_Account_Binding()
     {
 
@@ -184,6 +194,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.2")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountContact)]
     public async Task Uacme_Updates_The_Contact_Of_Its_Account()
     {
 
@@ -206,6 +217,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.5")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountKeyRollover)]
     public async Task Uacme_Rolls_Its_Account_Key_Over()
     {
 
@@ -231,6 +243,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.6")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountDeactivated)]
     public async Task Uacme_Deactivates_Its_Account()
     {
 
@@ -260,6 +273,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4; 9773 §4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RenewalForced)]
     public async Task Uacme_Renews_When_Forced_Having_Read_The_Window()
     {
 
@@ -286,6 +300,8 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [TestCase("certificate key")]
     [Property("RFC", "8555 §7.6")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RevokedByAccount, Argument = "account")]
+    [Cell(InteropCells.RevokedByCertificateKey, Argument = "certificate key")]
     public async Task Uacme_Revokes_Its_Certificate(String By)
     {
 
@@ -313,6 +329,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4, §6.7")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RefusedName)]
     public async Task Uacme_Is_Told_Of_A_Name_Not_Signed_For()
     {
 
@@ -330,6 +347,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.4")]
     [Property("Level", "SHOULD")]
+    [Cell(InteropCells.RefusedNoEAB)]
     public async Task Uacme_Is_Told_An_External_Account_Binding_Is_Required()
     {
 
@@ -347,6 +365,7 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §8.3, §7.5.1")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RefusedWrongAnswer)]
     public async Task Uacme_Is_Told_Of_A_Wrong_Answer()
     {
 

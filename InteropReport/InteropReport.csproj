@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Renders docs/INTEROP-MATRIX.md from the TRX files of an interop run.
+       Nothing of the submodules and no NUnit: it reads what the tests wrote
+       into their output, by InteropCells, the one file it shares with them. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <RootNamespace>PKIConformance.InteropReport</RootNamespace>
+    <AssemblyName>pkiconformance-interop-report</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\src\PKIConformance.Core\InteropCells.cs" Link="InteropCells.cs" />
+  </ItemGroup>
+
+</Project>

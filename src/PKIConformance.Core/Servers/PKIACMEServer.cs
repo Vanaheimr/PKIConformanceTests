@@ -86,7 +86,7 @@ public sealed class PKIACMEServer : IACMEServerUnderTest
         var port             = PKI.HTTPPort.ToUInt16();
 
         this.DirectoryURL    = new Uri($"https://127.0.0.1:{port}/acme/directory");
-        this.Name            = $"PKI {CommitOf(typeof(PKINode).Assembly)}";
+        this.Name            = Revisions.PKI;
 
         if (WslHost is not null)
             this.DirectoryURLFromWsl = new Uri($"https://{WslHost}:{port}/acme/directory");
@@ -195,26 +195,6 @@ public sealed class PKIACMEServer : IACMEServerUnderTest
             json["termsOfService"] = Options.TermsOfService;
 
         return json;
-
-    }
-
-    #endregion
-
-    #region (private static) CommitOf(Assembly)
-
-    /// <summary>
-    /// The commit the assembly was built from, as its Directory.Build.props
-    /// stamped it - shortened as git shortens it.
-    /// </summary>
-    private static String CommitOf(Assembly Assembly)
-    {
-
-        var commit = Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().
-                              FirstOrDefault(metadata => metadata.Key == "GitCommit")?.Value ?? "unknown";
-
-        return commit.Length > 8 && !commit.StartsWith("unknown")
-                   ? commit[..8] + (commit.EndsWith("-dirty") ? "-dirty" : "")
-                   : commit;
 
     }
 

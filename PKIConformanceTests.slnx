@@ -5,6 +5,9 @@
     <Project Path="conformance/PKIConformance.ACME.Server.Tests/PKIConformance.ACME.Server.Tests.csproj" />
     <Project Path="conformance/PKIConformance.ACME.Validation.Tests/PKIConformance.ACME.Validation.Tests.csproj" />
   </Folder>
+  <Folder Name="/InteropReport/">
+    <Project Path="InteropReport/InteropReport.csproj" />
+  </Folder>
   <Folder Name="/interop/">
     <Project Path="interop/PKIInterop.ACMEClients.Tests/PKIInterop.ACMEClients.Tests.csproj" />
     <Project Path="interop/PKIInterop.ACMEServers.Tests/PKIInterop.ACMEServers.Tests.csproj" />

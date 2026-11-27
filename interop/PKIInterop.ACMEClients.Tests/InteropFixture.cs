@@ -40,6 +40,9 @@ public abstract class InteropFixture(String ServerName)
     /// <summary>The tools of WSL the fixture needs.</summary>
     protected abstract String[]          Tools        { get; }
 
+    /// <summary>The client of the fixture and its version - its column of the interop matrix.</summary>
+    protected abstract String            PeerName     { get; }
+
     /// <summary>The server under test of the test.</summary>
     protected IACMEServerUnderTest       Server       { get; private set; } = null!;
 
@@ -72,6 +75,11 @@ public abstract class InteropFixture(String ServerName)
     [OneTimeSetUp]
     public void RequirePeers()
         => TestEnvironment.RequireWsl(Tools);
+
+    /// <summary>The test's cell of the interop matrix, into its output (InteropCells).</summary>
+    [SetUp]
+    public void DeclareCell()
+        => InteropMatrix.Declare(InteropCells.Clients, PeerName, ServerName == ServersUnderTest.PKI ? Revisions.PKI : ServerName);
 
     [TearDown]
     public async Task StopBench()

@@ -75,6 +75,10 @@ public sealed class StepCA : Peer, IACMEServerPeer
 
     /// <inheritdoc/>
     public String         Name
+        => Installed;
+
+    /// <summary>"step-ca 0.30.2": the one installed - its column of the interop matrix.</summary>
+    public static String  Installed
         => Version.Replace("Smallstep CA/", "step-ca ").Split(' ', 3) is [ var name, var number, .. ] ? $"{name} {number}" : Version;
 
     /// <inheritdoc/>

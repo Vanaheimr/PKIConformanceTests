@@ -63,11 +63,13 @@ way through the same `DNSClient` and gets every record.
 
 Tests: `DNS01ValidationTests` (all 14; each also checks that the validation
 name was asked for, so that none of them passes because nothing was asked).
-And by three clients of other hands, each with its own DNS plugin writing
-into BIND by RFC 2136 - the records arrive (`*_Writes_Its_dns01_Record_By_RFC_2136`,
-green), the PKI never asks: `CertbotTests.Certbot_Gets_A_Certificate_By_dns01`,
-`LegoTests.Lego_Gets_A_Certificate_By_dns01`, `AcmeShTests.AcmeSh_Gets_A_Certificate_By_dns01`
-(a name and a wildcard each, 6).
+And by three clients of other hands in five versions, each with its own DNS
+plugin writing into BIND by RFC 2136 - the records arrive
+(`*_Writes_Its_dns01_Record_By_RFC_2136`, green), the PKI never asks:
+`CertbotDebianTests` and `CertbotUpstreamTests` (certbot 4.0.0 and 5.10.0)
+`.Certbot_Gets_A_Certificate_By_dns01`, `LegoTests.Lego_Gets_A_Certificate_By_dns01`,
+`AcmeShDebianTests` and `AcmeShUpstreamTests` (acme.sh 3.1.1 and 3.1.7)
+`.AcmeSh_Gets_A_Certificate_By_dns01` (a name and a wildcard each, 10).
 
 #### S-1
 

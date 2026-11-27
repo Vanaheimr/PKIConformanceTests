@@ -21,6 +21,11 @@ namespace PKIInterop.ACMEClients.Tests;
 public class BenchInteropTests
 {
 
+    /// <summary>The test's line of the interop matrix, into its output: the bench, counted apart.</summary>
+    [SetUp]
+    public void DeclareCell()
+        => InteropMatrix.Declare(InteropCells.Bench, "bench of interop A", Revisions.PKI);
+
     /// <summary>
     /// Every name of the bench resolves to the loopback, by the system - as
     /// the PKI resolves http-01.

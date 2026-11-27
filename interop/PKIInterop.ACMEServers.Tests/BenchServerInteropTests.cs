@@ -31,6 +31,11 @@ public sealed class BenchServerInteropTests
     private static PebbleBuild Build(String Name)
         => Name == "Debian" ? PebbleBuild.Debian : PebbleBuild.Upstream;
 
+    /// <summary>The test's line of the interop matrix, into its output: the bench, counted apart.</summary>
+    [SetUp]
+    public void DeclareCell()
+        => InteropMatrix.Declare(InteropCells.Bench, "bench of interop B", Revisions.Hermod);
+
     [OneTimeSetUp]
     public void RequirePeers()
     {

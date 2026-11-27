@@ -35,7 +35,9 @@ jobs:
         with:
           dotnet-version: '11.0.x'
 
-      # Debian's packages and the pinned upstream lego (build/peers/pins.env).
+      # Debian's packages, and beside them the pinned upstream tier
+      # (build/peers/pins.env): lego, step-ca, Pebble, certbot in a venv by
+      # its hashes, acme.sh at its tag. Both tiers gate (PLAN.md, section 10).
       - name: Install the peers
         run: sh build/peers/setup-wsl.sh
 
@@ -59,14 +61,21 @@ jobs:
           test "$skipped" -eq 0
 
       # What is known to be red: a KnownIssue or a ToDo that turns green here is
-      # one to close. Informational, never red.
+      # one to close, and the job's summary names it. Informational, never
+      # red - and the interop ones among them are the red cells of the matrix.
       - name: Test (KnownIssue and ToDo)
+        if: ${{ !cancelled() }}
         continue-on-error: true
         run: >
           sh build/bench-namespace.sh dotnet test PKIConformanceTests.slnx --configuration Release --no-build
-          --filter "TestCategory=KnownIssue|TestCategory=ToDo"
+          --filter "TestCategory!=Online&TestCategory!=Docker&(TestCategory=KnownIssue|TestCategory=ToDo)"
           --logger "trx;LogFilePrefix=open"
           --results-directory artifacts
+
+      - name: What of KnownIssue and ToDo passes
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: sh build/closable.sh artifacts/open*.trx >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test results
         if: ${{ !cancelled() }}
@@ -113,6 +122,17 @@ jobs:
           echo "skipped: $skipped"
           test "$skipped" -eq 0
 
+      # C-7, as Boulder sees it: a red cell of the matrix. Informational.
+      - name: Test (Boulder, KnownIssue and ToDo)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 30
+        run: >
+          dotnet test interop/PKIInterop.ACMEServers.Tests --configuration Release --no-build
+          --filter "TestCategory=Docker&(TestCategory=KnownIssue|TestCategory=ToDo)"
+          --logger "trx;LogFilePrefix=boulder-open"
+          --results-directory artifacts
+
       - name: Boulder's logs
         if: failure()
         working-directory: /usr/local/lib/pkiconformance
@@ -128,3 +148,149 @@ jobs:
           path: |
             artifacts/*.trx
             artifacts/boulder.log
+
+  matrix:
+    # The interop matrix of the night (docs/INTEROP-MATRIX.md), rendered from
+    # the TRX files of the two lanes above - the gating runs and the red ones
+    # of KnownIssue and ToDo, which are the red cells. Red where a test is red
+    # without a finding or a ToDo (InteropReport's exit code). Into the job's
+    # summary and an artifact; the copy in the repository is committed from a
+    # run on a developer machine, so that a diff shows what a night changed.
+    name: interop matrix
+    needs: [ peers, boulder ]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '11.0.x'
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: nightly-{peers,boulder}
+          path: artifacts
+          merge-multiple: true
+
+      - name: Render the matrix
+        run: dotnet run --project InteropReport --configuration Release -- artifacts -o artifacts/INTEROP-MATRIX.md
+
+      - name: Into the summary
+        if: ${{ !cancelled() }}
+        run: test -f artifacts/INTEROP-MATRIX.md && cat artifacts/INTEROP-MATRIX.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: nightly-interop-matrix
+          path: artifacts/INTEROP-MATRIX.md
+
+  against-submodule-masters:
+    # The suite against the master of every submodule - Hermod's and the
+    # PKI's, and what they build with - where the gate tests the pins. The
+    # early word that a change upstream broke a conformance result, or fixed
+    # one: the summary says how far each master is past its pin and which
+    # commits those are, and which KnownIssue or ToDo passes there.
+    #
+    # The offline set and the peers of WSL, red on any failure and on any
+    # skip, as the peers lane; Boulder stays with its own lane.
+    name: against-submodule-masters (debian-13-container)
+    runs-on: ubuntu-latest
+    container: debian:13
+    steps:
+      - name: Install git
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends ca-certificates git
+          git config --system http.version HTTP/1.1
+
+      # fetch-depth 0: the commits between a pin and its master are the
+      # point of the summary, and a shallow submodule has one.
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # A loop over .gitmodules, not `git submodule foreach`: the headings
+      # want double quotes and the fences single ones, and nesting both in
+      # foreach's own argument is how a fence becomes command substitution
+      # (SSHConformanceTests' nightly). A new submodule joins by existing.
+      - name: Move the submodules to master, and say what that changes
+        run: |
+          set -e
+          git config --global --add safe.directory '*'
+          {
+            echo '### What the gate pins'
+            echo '```'
+            git submodule status
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          for sm in $(git config --file .gitmodules --get-regexp path | awk '{print $2}'); do
+            pin="$(git -C "${sm}" rev-parse HEAD)"
+            git -C "${sm}" fetch -q origin master
+            tip="$(git -C "${sm}" rev-parse FETCH_HEAD)"
+            n="$(git -C "${sm}" rev-list --count "${pin}..${tip}")"
+            {
+              echo
+              echo "#### ${sm}: ${n} commit(s) past the pin"
+              echo '```'
+              git -C "${sm}" log --oneline --no-decorate "${pin}..${tip}" || true
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "${sm}: ${pin} -> ${tip} (${n} commits)"
+            git -C "${sm}" checkout -q FETCH_HEAD
+          done
+
+      # From here on the peers lane, step for step; its comments are there.
+      - name: Install .NET prerequisites
+        run: apt-get install -y --no-install-recommends curl libicu76 libssl3t64 libstdc++6 tzdata
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '11.0.x'
+
+      - name: Install the peers
+        run: sh build/peers/setup-wsl.sh
+
+      - name: Build
+        run: dotnet build PKIConformanceTests.slnx --configuration Release
+
+      - name: Test (offline and peers, against the masters)
+        timeout-minutes: 75
+        run: >
+          sh build/bench-namespace.sh dotnet test PKIConformanceTests.slnx --configuration Release --no-build
+          --filter "TestCategory!=Online&TestCategory!=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFilePrefix=masters"
+          --results-directory artifacts
+
+      - name: No test may have skipped
+        shell: bash
+        run: |
+          skipped=$(cat artifacts/masters*.trx | grep -o 'outcome="NotExecuted"' | wc -l)
+          echo "skipped: $skipped"
+          test "$skipped" -eq 0
+
+      - name: Test (KnownIssue and ToDo, against the masters)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: >
+          sh build/bench-namespace.sh dotnet test PKIConformanceTests.slnx --configuration Release --no-build
+          --filter "TestCategory!=Online&TestCategory!=Docker&(TestCategory=KnownIssue|TestCategory=ToDo)"
+          --logger "trx;LogFilePrefix=masters-open"
+          --results-directory artifacts
+
+      - name: What of KnownIssue and ToDo passes on the masters
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: sh build/closable.sh artifacts/masters-open*.trx >> "$GITHUB_STEP_SUMMARY"
+
+      # Named apart from the pinned lanes: InteropReport reads a directory
+      # recursively, and a run against the masters mixed into the pinned ones
+      # would render a matrix of no one revision.
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-against-submodule-masters
+          path: artifacts/*.trx

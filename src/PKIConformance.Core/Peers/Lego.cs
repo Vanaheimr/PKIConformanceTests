@@ -21,6 +21,10 @@ public sealed class Lego(String TrustedRootFile) : Peer("lego", TrustedRootFile)
 
     private static readonly Lazy<String> version = new (() => Wsl.Run("lego --version", TimeSpan.FromSeconds(15)).StdOut.Trim());
 
+    /// <summary>"lego 5.7.0" - its column of the interop matrix.</summary>
+    public static String Name
+        => Version.Split(' ') is [ "lego", "version", var number, .. ] ? $"lego {number}" : Version;
+
     /// <summary>
     /// Where this lego keeps its accounts and certificates.
     /// </summary>

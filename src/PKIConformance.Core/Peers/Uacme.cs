@@ -25,6 +25,10 @@ public sealed class Uacme(String TrustedRootFile) : Peer("uacme", TrustedRootFil
 
     private static readonly Lazy<String> version = new (() => Wsl.Run("uacme --version 2>&1", TimeSpan.FromSeconds(15)).StdOut.Trim().Split('\n').First().Trim());
 
+    /// <summary>"uacme 1.7.6 (Debian)" - its column of the interop matrix.</summary>
+    public static String Name
+        => $"uacme {Version.Split(' ')[^1]} (Debian)";
+
     #endregion
 
 

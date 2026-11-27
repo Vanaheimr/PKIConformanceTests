@@ -7,37 +7,40 @@ using PKIConformance.Core.Servers;
 namespace PKIInterop.ACMEClients.Tests;
 
 /// <summary>
-/// acme.sh - Debian 13's 3.1.1 - against the ACME server under test, the row
-/// of acme.sh in the matrix of PLAN.md, section 4.5: certificates by http-01
-/// from its own web server (socat) and by a webroot, of names and addresses,
-/// of every kind of key, of sixteen names and of its own CSR; account keys
-/// of both kinds; an external account binding; a new contact and a
-/// deactivated account; a forced renewal; revocation; tls-alpn-01 alone;
-/// dns-01 by dns_nsupdate into BIND; and the refusals.
+/// acme.sh - Debian 13's 3.1.1 and upstream's at its pin - against the ACME
+/// server under test, the columns of acme.sh in the matrix of PLAN.md,
+/// section 4.5: certificates by http-01 from its own web server (socat) and
+/// by a webroot, of names and addresses, of every kind of key, of sixteen
+/// names and of its own CSR; account keys of both kinds; an external account
+/// binding; a new contact and a deactivated account; a forced renewal;
+/// revocation; tls-alpn-01 alone; dns-01 by dns_nsupdate into BIND; and the
+/// refusals.
 /// </summary>
 /// <remarks>
-/// Grey for acme.sh 3.1.1, and so without a test here: profiles and ARI.
+/// Grey for Debian's 3.1.1, and so without a test there: profiles and ARI -
+/// the tests of <see cref="AcmeShUpstreamTests"/>.
 /// </remarks>
-[TestFixtureSource(typeof(ServersUnderTest), nameof(ServersUnderTest.All))]
 [Property("RFC", "8555 §7.4, §8")]
-public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
+public abstract class AcmeShTests(String ServerName, AcmeShBuild Build) : InteropFixture(ServerName)
 {
 
-    protected override String[] Tools => [ "acme.sh", "socat", "openssl" ];
+    protected override String[] Tools => [ Build.Script, "socat", "openssl" ];
 
-    private AcmeSh NewAcmeSh()
-        => Keep(new AcmeSh(Server.TLS.RootFile));
+    protected override String   PeerName => Build.Version;
 
-    private String Common(String Email = "acmesh@acme.test")
+    protected AcmeSh NewAcmeSh()
+        => Keep(new AcmeSh(Server.TLS.RootFile, Build));
+
+    protected String Common(String Email = "acmesh@acme.test")
         => $"--server '{DirectoryURL}' --accountemail {Email}";
 
-    private String Standalone
+    protected String Standalone
         => $"--standalone --httpport {HTTP01Port}";
 
-    private static String Domains(params String[] Names)
+    protected static String Domains(params String[] Names)
         => String.Join(" ", Names.Select(name => $"-d '{name}'"));
 
-    private static String Evidence(Wsl.Result Result, AcmeSh AcmeSh)
+    protected static String Evidence(Wsl.Result Result, AcmeSh AcmeSh)
         => $"{Result}\n--- acme.sh.log ---\n{AcmeSh.Log[^Math.Min(AcmeSh.Log.Length, 6000)..]}";
 
 
@@ -54,6 +57,10 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [TestCase("webroot",    BenchNames.WWW)]
     [Property("RFC", "8555 §8.3; 8738")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.Http01Webroot, Argument = "webroot")]
+    [Cell(InteropCells.IPv4, Argument = "127.0.0.1")]
+    [Cell(InteropCells.IPv6, Argument = "::1")]
+    [Cell(InteropCells.Http01OwnServer)]
     public async Task AcmeSh_Gets_A_Certificate_By_http01(String Mode, String Name)
     {
 
@@ -80,6 +87,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [TestCase("4096",   "RSA", 4096)]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.CertificateKeys)]
     public async Task AcmeSh_Gets_A_Certificate_Of_The_Key_Asked_For(String KeyLength, String Algorithm, Int32 Size)
     {
 
@@ -101,6 +109,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [TestCase("2048",   "RSA", "2048")]
     [Property("RFC", "8555 §6.2, §7.3")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountKeys)]
     public async Task AcmeSh_Opens_An_Account_Of_The_Key_Asked_For(String KeyLength, String KeyType, String Detail)
     {
 
@@ -125,6 +134,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.SixteenNames)]
     public async Task AcmeSh_Gets_A_Certificate_Of_Sixteen_Names()
     {
 
@@ -144,6 +154,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.OwnCSR)]
     public async Task AcmeSh_Gets_A_Certificate_For_Its_Own_CSR()
     {
 
@@ -168,6 +179,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountEAB)]
     public async Task AcmeSh_Opens_An_Account_By_An_External_Account_Binding()
     {
 
@@ -191,6 +203,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.2")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountContact)]
     public async Task AcmeSh_Updates_The_Contact_Of_Its_Account()
     {
 
@@ -215,6 +228,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.6")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountDeactivated)]
     public async Task AcmeSh_Deactivates_Its_Account()
     {
 
@@ -243,6 +257,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RenewalForced)]
     public async Task AcmeSh_Renews_When_Forced()
     {
 
@@ -265,6 +280,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.6")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RevokedByAccount)]
     public async Task AcmeSh_Revokes_Its_Certificate_For_A_Reason()
     {
 
@@ -292,6 +308,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.4, §6.7")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RefusedName)]
     public async Task AcmeSh_Is_Told_Of_A_Name_Not_Signed_For()
     {
 
@@ -310,6 +327,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §7.3.4")]
     [Property("Level", "SHOULD")]
+    [Cell(InteropCells.RefusedNoEAB)]
     public async Task AcmeSh_Is_Told_An_External_Account_Binding_Is_Required()
     {
 
@@ -329,6 +347,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §8.3, §7.5.1")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.RefusedWrongAnswer)]
     public async Task AcmeSh_Is_Told_Of_A_Wrong_Answer()
     {
 
@@ -349,6 +368,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8737; 8555 §7.5")]
     [Property("Level", "SHOULD")]
+    [Cell(InteropCells.TlsAlpn01Alone)]
     public async Task AcmeSh_With_tls_alpn_01_Alone_Is_Told_There_Is_No_Challenge_For_It()
     {
 
@@ -375,6 +395,7 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Test]
     [Property("RFC", "8555 §8.4; 2136; 8945")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.Dns01Record)]
     public async Task AcmeSh_Writes_Its_dns01_Record_By_RFC_2136()
     {
 
@@ -396,6 +417,8 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     [Property("Level", "MUST")]
     [Category(TestCategories.KnownIssue)]
     [Property("Finding", "V-1")]
+    [Cell(InteropCells.Wildcard, Argument = "*.acme.test")]
+    [Cell(InteropCells.Dns01Certificate)]
     public async Task AcmeSh_Gets_A_Certificate_By_dns01(String Name)
     {
 
@@ -409,5 +432,116 @@ public class AcmeShTests(String ServerName) : InteropFixture(ServerName)
     }
 
     #endregion
+
+}
+
+
+/// <summary>Debian 13's acme.sh, 3.1.1.</summary>
+[TestFixtureSource(typeof(ServersUnderTest), nameof(ServersUnderTest.All))]
+public sealed class AcmeShDebianTests(String ServerName) : AcmeShTests(ServerName, AcmeShBuild.Debian);
+
+
+/// <summary>
+/// Upstream's acme.sh at its pin (build/peers/pins.env), and the cells it
+/// has beyond Debian's: profiles, a renewal that says what it replaces, and
+/// a renewal of its own when the server's window of ARI is due.
+/// </summary>
+[TestFixtureSource(typeof(ServersUnderTest), nameof(ServersUnderTest.All))]
+public sealed class AcmeShUpstreamTests(String ServerName) : AcmeShTests(ServerName, AcmeShBuild.Upstream)
+{
+
+    /// <summary>
+    /// draft-ietf-acme-profiles: the profile acme.sh asks for, and a
+    /// certificate that holds as long as the profile says.
+    /// </summary>
+    [Test]
+    [Property("RFC", "draft-ietf-acme-profiles-03 §4")]
+    [Property("Level", "MUST")]
+    [Cell(InteropCells.Profiles)]
+    public async Task AcmeSh_Gets_A_Certificate_Of_The_Profile_Asked_For()
+    {
+
+        await StartAsync(new ACMEServerOptions(Profiles: new Dictionary<String, Int32> { ["classic"] = 90, ["shortlived"] = 7 }));
+
+        var acme   = NewAcmeSh();
+        var result = acme.Run($"--issue {Common()} {Domains("127.0.0.1")} --keylength ec-256 --cert-profile shortlived {Standalone}");
+        var leaf   = AssertIssued(acme.FullChain("127.0.0.1"), [ "127.0.0.1" ], "EC", 256, Evidence(result, acme));
+
+        Assert.That((leaf.NotAfter - leaf.NotBefore).TotalDays, Is.InRange(6, 8), "the seven days of \"shortlived\"");
+
+    }
+
+    /// <summary>
+    /// RFC 9773, section 5: a renewal says which certificate it replaces -
+    /// <i>"Clients SHOULD include this field in newOrder requests if there is
+    /// a clear predecessor certificate"</i> - and the server keeps it so.
+    /// </summary>
+    [Test]
+    [Property("RFC", "9773 §5")]
+    [Property("Level", "SHOULD")]
+    [Cell(InteropCells.RenewalReplaces)]
+    public async Task AcmeSh_Renews_Saying_Which_Certificate_It_Replaces()
+    {
+
+        await StartAsync();
+
+        var acme    = NewAcmeSh();
+        var first   = acme.Run($"--issue {Common()} {Domains("127.0.0.1")} --keylength ec-256 {Standalone}");
+        var before  = AssertIssued(acme.FullChain("127.0.0.1"), [ "127.0.0.1" ], "EC", 256, Evidence(first, acme));
+        var renewal = acme.Run($"--renew {Common()} {Domains("127.0.0.1")} --ecc --force");
+        var after   = AssertIssued(acme.FullChain("127.0.0.1"), [ "127.0.0.1" ], "EC", 256, Evidence(renewal, acme));
+
+        Assert.That(Server.Issued().Single(issued => issued.DER.AsSpan().SequenceEqual(after.RawData)).Replaces,
+                    Is.EqualTo(PKIConformance.Core.RawACME.RawARI.CertificateId(before.RawData)), $"replaces the one before: {Evidence(renewal, acme)}");
+
+    }
+
+    /// <summary>
+    /// RFC 9773, section 4.2: acme.sh renews unforced when the server's
+    /// window is due - the PKI moves the window of a revoked certificate
+    /// into the past - having read it at the renewal's check.
+    /// </summary>
+    /// <remarks>
+    /// The certificate is revoked out of band, by its own key, as a CA in an
+    /// incident would - the case ARI is for: acme.sh deletes a certificate
+    /// it revoked itself, and then has nothing to ask the window of.
+    /// </remarks>
+    [Test]
+    [Property("RFC", "9773 §4.2")]
+    [Property("Level", "SHOULD")]
+    [Cell(InteropCells.RenewalByARI)]
+    public async Task AcmeSh_Renews_When_The_Window_Of_ARI_Is_Due()
+    {
+
+        await StartAsync();
+
+        var acme    = NewAcmeSh();
+        var first   = acme.Run($"--issue {Common()} {Domains("127.0.0.1")} --keylength ec-256 {Standalone}");
+        var before  = AssertIssued(acme.FullChain("127.0.0.1"), [ "127.0.0.1" ], "EC", 256, Evidence(first, acme));
+
+        using (var certificateKey = System.Security.Cryptography.ECDsa.Create())
+        {
+
+            certificateKey.ImportFromPem(acme.Key("127.0.0.1") ?? throw new InvalidOperationException($"acme.sh kept no key: {Evidence(first, acme)}"));
+
+            var raw     = await PKIConformance.Core.Scripted.RawACMEClient.ConnectAsync(Server);
+            using var jwk = new PKIConformance.Core.RawACME.RawKey(certificateKey, "ES256");
+            var revoked = await raw.PostAsync(jwk, null, raw.Resource("revokeCert"),
+                                              $"{{\"certificate\":\"{PKIConformance.Core.RawACME.RawBase64Url.Encode(before.RawData)}\",\"reason\":4}}");
+
+            Assert.That(revoked.Status, Is.EqualTo(200), $"revoked by its key: {revoked}");
+
+        }
+
+        var renewal = acme.Run($"--renew {Common()} {Domains("127.0.0.1")} --ecc");
+        var after   = AssertIssued(acme.FullChain("127.0.0.1"), [ "127.0.0.1" ], "EC", 256, Evidence(renewal, acme));
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(after.Thumbprint, Is.Not.EqualTo(before.Thumbprint),   $"renewed, unforced: {Evidence(renewal, acme)}");
+            Assert.That(renewal.StdOut,   Does.Contain("ARI suggestedWindow"), "acme.sh read the window");
+        }
+
+    }
 
 }

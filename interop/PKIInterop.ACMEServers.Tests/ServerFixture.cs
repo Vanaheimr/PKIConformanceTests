@@ -48,6 +48,13 @@ public abstract class ServerFixture
     /// <summary>The tools of WSL the fixture needs.</summary>
     protected abstract String[]           Tools       { get; }
 
+    /// <summary>The server of the fixture and its version - its column of the interop matrix.</summary>
+    protected abstract String             PeerName    { get; }
+
+    /// <summary>The matrix the fixture's tests are cells of (InteropCells).</summary>
+    protected virtual  String             Matrix
+        => InteropCells.Servers;
+
     /// <summary>Where Hermod's responders listen: the loopback, where the server is on the host.</summary>
     protected virtual IPv4Address         ResponderAddress
         => IPv4Address.Localhost;
@@ -105,6 +112,8 @@ public abstract class ServerFixture
     [SetUp]
     public void StartResponders()
     {
+
+        InteropMatrix.Declare(Matrix, PeerName, Revisions.Hermod);
 
         Port80      = new HTTPServer(IPAddress: ResponderAddress,
                                      TCPPort:   IPPort.Zero,

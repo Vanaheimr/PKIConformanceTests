@@ -57,6 +57,11 @@ public class LegoAccountTests(String ServerName)
             await server.DisposeAsync();
     }
 
+    /// <summary>The test's cell of the interop matrix, into its output (InteropCells).</summary>
+    [SetUp]
+    public void DeclareCell()
+        => InteropMatrix.Declare(InteropCells.Clients, Lego.Name, ServerName == ServersUnderTest.PKI ? Revisions.PKI : ServerName);
+
 
     /// <summary>
     /// A new account, for a key of the given type: lego says so, and what it
@@ -69,6 +74,7 @@ public class LegoAccountTests(String ServerName)
     [TestCase("RSA3072", "RS256")]
     [TestCase("RSA4096", "RS256")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.Account)]
     public void Lego_Registers_An_Account(String KeyType, String Algorithm)
     {
 
@@ -113,6 +119,7 @@ public class LegoAccountTests(String ServerName)
     [Test]
     [Property("RFC",   "8555 §6.2")]
     [Property("Level", "MUST")]
+    [Cell(InteropCells.AccountKeys)]
     public void An_MLDSA_Account_Key_Is_Refused_As_badSignatureAlgorithm()
     {
 

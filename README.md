@@ -19,24 +19,26 @@ suite's own, RFC vectors, openssl, and the peers.
 - [FINDINGS.md](FINDINGS.md) - where the implementations deviate from the RFCs
 
 **State (2026-11-27, PKI `ba8324a9`, Hermod `0a93a6fb`):** phases 0 to 3
-and 5 done, phase 4 nearly - natively in WSL 668 ✅ · 96 ❌ of 764 (87 codec,
-239 server, 40 validation, 168 client, 122 interop of five real clients
-against the PKI - certbot 4.0.0, lego 5.7.0, acme.sh 3.1.1, dehydrated 0.7.2,
-uacme 1.7.6 - and 108 of Hermod against four real servers - Pebble 2.6.0
-and 2.10.3, step-ca 0.30.2, Boulder in Docker; the matrices of
-[PLAN.md](PLAN.md), sections 4.5 and 4.6), and every red one is a finding
-or a ToDo: **29 findings**, tagged `KnownIssue` - 14 against the PKI's server
-and validator, S-1 to S-13 and V-1 (among them dns-01, which never
-validates - for three real clients too, whose records reach BIND), and 15
-against Hermod's client and certificate manager, C-1 to
-C-11 and M-1 to M-4 (among them a certificate chain with a private key in
-it, which the client takes) - and 13 trackers of ToDos, T-S5 and T-C1 to
-T-C12, tagged `ToDo`. The real clients found nothing new in the PKI; the
-real servers found one thing in Hermod, M-4 (privkey.pem without the final
-newline of certbot's), and saw C-7 again. On Windows S-3 is
-red as well, the interop tests skip
-(the Windows firewall keeps WSL out), and so do the test of a certificate
-dated 0001, which Windows cannot load, and the one of a key file's POSIX mode.
+and 5 done, phases 4 and 6 nearly (the nightly has not run yet) - natively
+in WSL 720 ✅ · 100 ❌ of 820 (87 codec, 239 server, 40 validation, 168
+client, 178 interop of five real clients against the PKI - certbot 4.0.0
+and 5.10.0, lego 5.7.0, acme.sh 3.1.1 and 3.1.7, dehydrated 0.7.2, uacme
+1.7.6 - and 108 of Hermod against four real servers - Pebble 2.6.0 and
+2.10.3, step-ca 0.30.2, Boulder in Docker; cell by cell in
+[docs/INTEROP-MATRIX.md](docs/INTEROP-MATRIX.md), generated from the run),
+and every red one is a finding or a ToDo: **29 findings**, tagged
+`KnownIssue` - 14 against the PKI's server and validator, S-1 to S-13 and
+V-1 (among them dns-01, which never validates - for three real clients in
+five versions too, whose records reach BIND), and 15 against Hermod's
+client and certificate manager, C-1 to C-11 and M-1 to M-4 (among them a
+certificate chain with a private key in it, which the client takes) - and
+13 trackers of ToDos, T-S5 and T-C1 to T-C12, tagged `ToDo`. The real
+clients found nothing new in the PKI, not at their current versions
+either; the real servers found one thing in Hermod, M-4 (privkey.pem
+without the final newline of certbot's), and saw C-7 again. On Windows S-3
+is red as well, the interop tests skip (the Windows firewall keeps WSL
+out), and so do the test of a certificate dated 0001, which Windows cannot
+load, and the one of a key file's POSIX mode.
 
 ## Running
 
@@ -83,6 +85,16 @@ The stack takes a few minutes to start, and is stopped after the tests;
 `PKICONFORMANCE_KEEP_BOULDER=1` in the environment keeps it running for the
 next run.
 
+The interop matrix, [docs/INTEROP-MATRIX.md](docs/INTEROP-MATRIX.md), is
+generated from the TRX files of a run - every interop test writes the cell
+it is into its output:
+
+```
+dotnet run --project InteropReport -- artifacts/
+```
+
+A test of several runs in there counts once, as it came out in the last.
+
 ## Test categories
 
 | Category | Needs | Run with |
@@ -104,6 +116,7 @@ src/PKIConformance.Core/Peers/           the peers: clients, servers, BIND, chal
 conformance/PKIConformance.ACME.*.Tests/ offline, loopback only
 interop/PKIInterop.ACMEClients.Tests/    real clients against the PKI
 interop/PKIInterop.ACMEServers.Tests/    Hermod against real servers
+InteropReport/                           the TRX files of a run → docs/INTEROP-MATRIX.md
 fixtures/                                what real peers wrote, as references: certbot's live/
 build/                                   shared MSBuild settings, peers, scripts
 libs/                                    the submodules
