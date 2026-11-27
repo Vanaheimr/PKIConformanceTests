@@ -236,6 +236,16 @@ Status legend: ✅ done · 🔶 in progress · ⬜ planned · 📋 optional / do
   forwarder's address of phase 5, drawn from .10 to .120, drew .68 in the
   first Boulder run of phase 6 - "forbidden by policy", a red test of the
   bench, not of Hermod. It is drawn below .64 now.
+- **The first nightly was red at its check of skips** (scheduled, on the
+  commit of phase 4): a Debian container of CI has no user namespace of its
+  own and no CAP_SYS_ADMIN, so `mount --bind` of uacme's CA bundle failed
+  (exit 32) and every test of uacme skipped. There the bundle is written in
+  place now - as `bench-namespace.sh` writes /etc/hosts there: root, and
+  thrown away after the run; a developer's WSL keeps the overlay.
+- **A check of skips must survive none**: `grep -o` of no match ends 1,
+  and under the `bash -e -o pipefail` of a step the count of a run with no
+  skip failed the step - Boulder's first lane on GitHub, 19 of 19 green, was
+  red for it. The grep is `|| true` now.
 
 ---
 

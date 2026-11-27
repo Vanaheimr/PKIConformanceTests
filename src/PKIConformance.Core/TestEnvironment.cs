@@ -91,8 +91,10 @@ public static class TestEnvironment
     /// Have the system's CA bundle trust the given root as well - for a peer
     /// that takes no CA file of its own (uacme). Done by laying a bundle with
     /// the root over /etc/ssl/certs/ca-certificates.crt, in the namespace of
-    /// build/bench-namespace.sh alone (or in a CI container): the system's
-    /// bundle is never touched. Skips where that cannot be done.
+    /// build/bench-namespace.sh alone: the system's bundle is never touched.
+    /// In a CI container, which has no namespace of its own and is thrown
+    /// away, the bundle is written in place instead. Skips where neither can
+    /// be done.
     /// </summary>
     public static void TrustSystemWide(String RootFile)
     {
@@ -112,7 +114,13 @@ public static class TestEnvironment
         var path = Path.Combine(Path.GetTempPath(), $"pkiconformance-bundle-{Guid.NewGuid():N}.crt");
         File.WriteAllText(path, File.ReadAllText(bundle) + "\n" + File.ReadAllText(RootFile) + "\n");
 
-        var mounted = Wsl.Run($"mount --bind '{path}' '{bundle}'", TimeSpan.FromSeconds(15));
+        // In the namespace, laid over; in a CI container - root, without the
+        // CAP_SYS_ADMIN a mount needs, and thrown away after the run - written
+        // in place, as build/bench-namespace.sh writes /etc/hosts there.
+        var mounted = Wsl.Run(inNamespace
+                                  ? $"mount --bind '{path}' '{bundle}'"
+                                  : $"cat '{path}' > '{bundle}'",
+                              TimeSpan.FromSeconds(15));
 
         if (!mounted.Success)
             Assert.Ignore($"The system's CA bundle could not be laid over - skipping: {mounted}");

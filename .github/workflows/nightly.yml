@@ -56,7 +56,7 @@ jobs:
       - name: No test may have skipped
         shell: bash
         run: |
-          skipped=$(cat artifacts/peers*.trx | grep -o 'outcome="NotExecuted"' | wc -l)
+          skipped=$(cat artifacts/peers*.trx | { grep -o 'outcome="NotExecuted"' || true; } | wc -l)
           echo "skipped: $skipped"
           test "$skipped" -eq 0
 
@@ -118,7 +118,7 @@ jobs:
       - name: No test may have skipped
         shell: bash
         run: |
-          skipped=$(cat artifacts/boulder*.trx | grep -o 'outcome="NotExecuted"' | wc -l)
+          skipped=$(cat artifacts/boulder*.trx | { grep -o 'outcome="NotExecuted"' || true; } | wc -l)
           echo "skipped: $skipped"
           test "$skipped" -eq 0
 
@@ -267,7 +267,7 @@ jobs:
       - name: No test may have skipped
         shell: bash
         run: |
-          skipped=$(cat artifacts/masters*.trx | grep -o 'outcome="NotExecuted"' | wc -l)
+          skipped=$(cat artifacts/masters*.trx | { grep -o 'outcome="NotExecuted"' || true; } | wc -l)
           echo "skipped: $skipped"
           test "$skipped" -eq 0
 
