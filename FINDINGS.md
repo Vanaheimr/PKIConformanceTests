@@ -118,12 +118,15 @@ point off the curve. On Linux it does (OpenSSL), and the answer is
 badPublicKey; on Windows (CNG) it does not throw there - the exception comes
 later, in `SignedBy` (`ACMEJWS.cs:281`), which catches nothing, and
 `HTTPAPI/PKIHTTPAPI.ACME.cs:1552` answers it 500 serverInternal. **Windows
-only**: the test is green natively in WSL. Fix:
-`ecdsa.ExportParameters(false)` after import, or validate the point
-(`ECParameters.Validate` does not), or catch `CryptographicException` in
-`SignedBy` as badPublicKey.
+only**: natively in WSL the answer is badPublicKey, and the test of that leg
+gates. Fix: `ecdsa.ExportParameters(false)` after import, or validate the
+point (`ECParameters.Validate` does not), or catch `CryptographicException`
+in `SignedBy` as badPublicKey.
 
-Tests: `RequestAuthenticationTests.A_Point_Off_The_Curve_Is_badPublicKey`.
+Tests: `RequestAuthenticationTests.A_Point_Off_The_Curve_Is_badPublicKey_On_Windows`,
+which skips elsewhere - the nightly, on Linux, does not see this one closed;
+a run on Windows does. `...A_Point_Off_The_Curve_Is_badPublicKey` is the
+gating test of the other platforms, and skips on Windows.
 
 #### S-4
 

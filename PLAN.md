@@ -423,11 +423,14 @@ the other way round: Linux refuses it, Windows does not (S-3).
 | 9773 §4.1 | ARI certificate ID | AKI.serial, serial with leading zero octet, vectors from the RFC |
 | 2986, 5280 | CSR | SAN set, CN length, key/signature algorithm, extensions; parsed with .NET's `CertificateRequest`, not Hermod |
 
-### 4.2 Server (`PKIConformance.ACME.Server.Tests`) — `RawACMEClient` → PKI ✅ 224
+### 4.2 Server (`PKIConformance.ACME.Server.Tests`) — `RawACMEClient` → PKI ✅ 225
 
 *Phase 2, 2026-11-26: 224 tests besides phase 0's 15 directory and nonce
 tests; 29 red on Windows, 28 natively in WSL, all of them findings S-1 to
-S-13 ([FINDINGS.md](FINDINGS.md)), tagged `KnownIssue`.* Not covered yet:
+S-13 ([FINDINGS.md](FINDINGS.md)), tagged `KnownIssue`.* *2026-11-27: S-3's
+test is two since - one gating where the platform checks the point, one
+`KnownIssue` on Windows alone, each skipping on the other leg - as the
+nightly, on Linux, reported the one test closable every night.* Not covered yet:
 persistence across a restart, the revocation as the CRL and OCSP show it
 (by `openssl`), `Accept` variants of the download, rate limits and
 `subproblems` (T-S4, T-S7), EdDSA (T-S9).

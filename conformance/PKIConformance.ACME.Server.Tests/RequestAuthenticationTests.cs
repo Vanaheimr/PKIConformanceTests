@@ -377,11 +377,47 @@ public class RequestAuthenticationTests(String ServerName) : ACMEServerFixture(S
     /// is "ES256" but "jwk" does not contain a valid P-256 public key"</i>: a
     /// point that is not on the curve.
     /// </summary>
+    /// <remarks>
+    /// Where the platform checks the point on import (OpenSSL, on Linux) -
+    /// gating. On Windows (CNG) it does not, and the answer is 500 (S-3):
+    /// <see cref="A_Point_Off_The_Curve_Is_badPublicKey_On_Windows"/> is the
+    /// test of that leg, and this one skips there.
+    /// </remarks>
+    [Test]
+    [Property("Level", "MUST")]
+    public Task A_Point_Off_The_Curve_Is_badPublicKey()
+    {
+
+        if (OperatingSystem.IsWindows())
+            Assert.Ignore("Windows does not check the point on import (S-3) - " +
+                          "A_Point_Off_The_Curve_Is_badPublicKey_On_Windows is the test of this leg.");
+
+        return PointOffTheCurveIsBadPublicKeyAsync();
+
+    }
+
+    /// <summary>
+    /// <see cref="A_Point_Off_The_Curve_Is_badPublicKey"/> on Windows, whose
+    /// CNG takes a point off the curve on import and throws only when it
+    /// verifies - which the PKI answers 500 serverInternal (S-3). Skips
+    /// elsewhere, so that a run of KnownIssue on Linux does not report S-3
+    /// fixed: a fix shows on Windows alone.
+    /// </summary>
     [Test]
     [Property("Level", "MUST")]
     [Category(TestCategories.KnownIssue)]
     [Property("Finding", "S-3")]
-    public async Task A_Point_Off_The_Curve_Is_badPublicKey()
+    public Task A_Point_Off_The_Curve_Is_badPublicKey_On_Windows()
+    {
+
+        if (!OperatingSystem.IsWindows())
+            Assert.Ignore("S-3 is of Windows alone - A_Point_Off_The_Curve_Is_badPublicKey is the test of this leg, and gates.");
+
+        return PointOffTheCurveIsBadPublicKeyAsync();
+
+    }
+
+    private async Task PointOffTheCurveIsBadPublicKeyAsync()
     {
 
         using var key   = RawKey.Generate("ES256");
