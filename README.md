@@ -18,15 +18,19 @@ suite's own, RFC vectors, openssl, and the peers.
 - [PLAN.md](PLAN.md) - what is tested, how, in which order, and the ToDos
 - [FINDINGS.md](FINDINGS.md) - where the implementations deviate from the RFCs
 
-**State (2026-11-26, PKI `ba8324a9`, Hermod `0a93a6fb`):** phases 0 to 3
-done - natively in WSL 452 ✅ · 86 ❌ of 538 (87 codec, 239 server, 40
-validation, 166 client, 6 lego 5.7.0 interop), and every red one is a finding
+**State (2026-11-27, PKI `ba8324a9`, Hermod `0a93a6fb`):** phases 0 to 3
+done, phase 4 nearly - natively in WSL 562 ✅ · 92 ❌ of 654 (87 codec, 239
+server, 40 validation, 166 client, 122 interop with certbot 4.0.0, lego
+5.7.0, acme.sh 3.1.1, dehydrated 0.7.2 and uacme 1.7.6 - the matrix of
+[PLAN.md](PLAN.md), section 4.5), and every red one is a finding
 or a ToDo: **28 findings**, tagged `KnownIssue` - 14 against the PKI's server
 and validator, S-1 to S-13 and V-1 (among them dns-01, which never
-validates), and 14 against Hermod's client and certificate manager, C-1 to
+validates - for three real clients too, whose records reach BIND), and 14
+against Hermod's client and certificate manager, C-1 to
 C-11 and M-1 to M-3 (among them a certificate chain with a private key in
 it, which the client takes) - and 13 trackers of ToDos, T-S5 and T-C1 to
-T-C12, tagged `ToDo`. On Windows S-3 is red as well, the 6 lego tests skip
+T-C12, tagged `ToDo`. The real clients found nothing new. On Windows S-3 is
+red as well, the interop tests skip
 (the Windows firewall keeps WSL out), and so do the test of a certificate
 dated 0001, which Windows cannot load, and the one of a key file's POSIX mode.
 

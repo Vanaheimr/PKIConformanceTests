@@ -12,14 +12,15 @@ namespace PKIInterop.ACMEClients.Tests;
 /// hook into a webroot the bench serves, of names and addresses, of every
 /// kind of key, of sixteen names and of its own CSR; account keys of both
 /// kinds; an external account binding; a new contact, a key rollover and a
-/// deactivated account; a forced renewal that says what it replaces (uacme
-/// has ARI); revocation by the account and by the certificate's key; and the
+/// deactivated account; a forced renewal, having read the window of ARI;
+/// revocation by the account and by the certificate's key; and the
 /// refusals.
 /// </summary>
 /// <remarks>
 /// uacme takes no CA file: it trusts the system's bundle, which the bench
 /// lays over in the namespace of the run (TestEnvironment.TrustSystemWide).
-/// Grey for uacme 1.7.6: profiles.
+/// Grey for uacme 1.7.6: profiles, and "replaces" - it reads ARI and says
+/// nothing of what a renewal replaces.
 /// </remarks>
 [TestFixtureSource(typeof(ServersUnderTest), nameof(ServersUnderTest.All))]
 [Property("RFC", "8555 §7.4, §8")]
@@ -251,13 +252,15 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
     #region Renewal, revocation
 
     /// <summary>
-    /// A forced renewal - and RFC 9773, section 5: uacme has ARI, and says
-    /// which certificate the new one replaces.
+    /// A forced renewal, after uacme read the certificate's window of RFC
+    /// 9773 at the server - the RenewalInfo of the PKI, read by a client of
+    /// another hand. (uacme 1.7.6 reads ARI and sends no "replaces": that
+    /// cell is grey.)
     /// </summary>
     [Test]
-    [Property("RFC", "8555 §7.4; 9773 §5")]
-    [Property("Level", "SHOULD")]
-    public async Task Uacme_Renews_Saying_Which_Certificate_It_Replaces()
+    [Property("RFC", "8555 §7.4; 9773 §4")]
+    [Property("Level", "MUST")]
+    public async Task Uacme_Renews_When_Forced_Having_Read_The_Window()
     {
 
         var uacme   = await StartUacmeAsync();
@@ -267,8 +270,11 @@ public class UacmeTests(String ServerName) : InteropFixture(ServerName)
         var renewal = Issue(uacme, "-f -t EC -b 256", "127.0.0.1");
         var after   = AssertIssued(uacme.Certificate("127.0.0.1"), [ "127.0.0.1" ], "EC", 256, renewal);
 
-        Assert.That(Server.Issued().Single(issued => issued.DER.AsSpan().SequenceEqual(after.RawData)).Replaces,
-                    Is.EqualTo(PKIConformance.Core.RawACME.RawARI.CertificateId(before.RawData)), $"replaces the one before: {renewal}");
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(renewal.StdOut,   Does.Contain("certificate renewal window: start="), $"uacme read the window: {renewal}");
+            Assert.That(after.Thumbprint, Is.Not.EqualTo(before.Thumbprint),                  $"a new certificate: {renewal}");
+        }
 
     }
 

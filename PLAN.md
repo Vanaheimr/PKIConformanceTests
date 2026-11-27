@@ -131,6 +131,34 @@ Status legend: ✅ done · 🔶 in progress · ⬜ planned · 📋 optional / do
   every request kept, every answer replaceable), `BenchClock` (every wait
   written down, none taken).
 
+### Learned in phase 4
+
+- **Five clients of other hands find nothing new in the PKI's server.**
+  Every cell they have is green - accounts, EAB, contacts, key rollover,
+  http-01 of names and addresses, every key, sixteen names, own CSRs,
+  profiles, renewal with "replaces", revocation by account and by key, the
+  CRL, the refusals - except dns-01, at V-1. What phase 2 found the hostile
+  client finds; the friendly ones never send it.
+- **The names of the bench without root.** The PKI resolves http-01 by the
+  operating system until T-S5, and a name a client proves has to resolve to
+  the loopback: `build/bench-namespace.sh` runs the tests in a user and
+  mount namespace of their own with an /etc/hosts of their own (unshare,
+  no root). The same namespace lets the bench lay a CA bundle over the
+  system's for uacme, which takes no CA file. Inside, the user is "root",
+  and /tmp of the real root is nobody's: the run gets a TMPDIR of its own.
+- **`named -g` ignores the logging of its configuration** and sends all to
+  stderr; `-f` keeps it. The first run saw no TXT record of any client,
+  which BIND had taken all along - a bench is tested first
+  (`BenchInteropTests`).
+- **What the versions of Debian 13 lack** is a grey cell, without a test:
+  certbot 4.0.0 has no IP identifiers and no ARI, acme.sh 3.1.1 and
+  dehydrated 0.7.2 neither profiles nor ARI, uacme 1.7.6 reads ARI's
+  window and sends no "replaces", lego 5.7.0 neither updates nor
+  deactivates an account. dehydrated 0.7.2 orders an address as a "dns"
+  identifier, which the PKI rightly refuses as malformed.
+- **The PKI keeps "replaces" by its own identifier of the certificate**;
+  the bench speaks RFC 9773's (`ServerIssued.Replaces`).
+
 ---
 
 ## 1. Guiding principles
@@ -384,45 +412,62 @@ phase 5), an order of an unknown status, several challenges of one type.
 | EAB | kid and MAC as given, padding tolerated |
 | Manager | file layout and modes compared with what **certbot itself** writes (`live/`, `archive/`, `cert.pem`, `chain.pem`, `fullchain.pem`, `privkey.pem`) — the reference comes from a real certbot run against Pebble (§4.6) and is kept as a fixture |
 
-### 4.5 Interop A (`PKIInterop.ACMEClients.Tests`) — real clients → PKI ⬜
+### 4.5 Interop A (`PKIInterop.ACMEClients.Tests`) — real clients → PKI 🔶 122
 
-The PKI runs in-process (as `PKITests/ACMETests.Started()` does: a root, a
-sub-CA, ACME settings per test, `http01Port` matching the client's listener),
-reachable from WSL at `Wsl.VmAddress`. The clients run as native Linux
-binaries. dns-01 goes through a real authoritative server: **BIND 9 with TSIG
+*Phase 4, 2026-11-27, natively in WSL: 122 tests - 111 of the matrix, the 6
+account tests of lego of phase 0, 5 of the bench itself - 116 green, 6 red,
+all of them dns-01 at V-1. No new finding: every client of the five takes
+every cell of the PKI it has, and the refusals reach it in the RFC's words.
+V-1 is seen three times over, by three DNS plugins of other hands: their
+records arrive in BIND, and the PKI never asks.*
+
+The PKI runs in-process, a server per test, its `http01Port` the port of the
+client's own web server or of the bench's web server of a webroot, its
+`DNSClient` pointed at a BIND of the test. The clients run as native Linux
+programs, natively in WSL (`build/test-in-wsl.sh`) or on Debian (the
+nightly), in a namespace of `build/bench-namespace.sh` where the names of
+the bench resolve to the loopback. dns-01 goes through **BIND 9 with TSIG
 and RFC 2136 updates**, so that each client's *own* DNS plugin is exercised
-(`certbot-dns-rfc2136`, lego `--dns rfc2136`, acme.sh `dns_nsupdate`); the PKI
-resolves through its `DNSClient` pointed at that BIND. A second, simpler path
-uses `pebble-challtestsrv` and the clients' hook mechanisms (certbot
-`--manual-auth-hook`, lego `--dns exec`, acme.sh custom DNS API).
+(`certbot-dns-rfc2136`, lego's `rfc2136`, acme.sh's `dns_nsupdate`). The
+second, simpler path through `pebble-challtestsrv` and the clients' hooks is
+not built: it would prove nothing BIND does not, until V-1 is fixed.
 
-| Feature | certbot | **lego** | acme.sh | dehydrated / uacme |
-|---|---|---|---|---|
-| Account: new + ToS + contact | ⬜ | ⬜ | ⬜ | ⬜ |
-| Account: EAB (`--eab-kid`/`--eab-hmac-key`, `--eab --kid --hmac`) | ⬜ | ⬜ | ⬜ | 📋 |
-| Account: update contact, deactivate | ⬜ | ⬜ | ⬜ | 📋 |
-| Account key types (certbot: RSA by default → exercises RS256) | ⬜ | ⬜ | ⬜ | ⬜ |
-| http-01 standalone / webroot | ⬜ | ⬜ | ⬜ | ⬜ |
-| dns-01 RFC 2136 / hook | ⬜ | ⬜ | ⬜ | ⬜ |
-| Wildcard, 10+ SANs | ⬜ | ⬜ | ⬜ | 📋 |
-| IP identifiers v4/v6 (RFC 8738) | probe | ⬜ | ⬜ | 📋 |
-| Own CSR (`--csr`) | ⬜ | ⬜ | ⬜ | 📋 |
-| Certificate keys ec256/ec384/rsa2048/3072/4096 | ⬜ | ⬜ | ⬜ | 📋 |
-| Profiles (`--preferred-profile`/`--required-profile`, lego `--profile`) | ⬜ | ⬜ | probe | — |
-| Renew forced / ARI-driven with `replaces` | ⬜ | ⬜ | probe | — |
-| Revoke by account / by certificate key, reasons | ⬜ | ⬜ | ⬜ | 📋 |
-| tls-alpn-01 only → clean "no matching challenge" | — | ⬜ | ⬜ | — |
-| Refusals surfaced: `rejectedIdentifier` (allowedNames), `externalAccountRequired`, wrong answer → invalid order | ⬜ | ⬜ | ⬜ | 📋 |
+✅ green · ❌ red, at a finding · — the client's version lacks it (no test,
+principle 7) · ⬜ not built yet
+
+| Feature | certbot 4.0.0 | **lego 5.7.0** | acme.sh 3.1.1 | dehydrated 0.7.2 | uacme 1.7.6 |
+|---|---|---|---|---|---|
+| Account: new + ToS + contact | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Account: EAB | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Account: new contact / deactivate | ✅ / ✅ | — / — | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ |
+| Account: key rollover (§7.3.5) | — | ✅ | — | — | ✅ |
+| Account key types | ⬜ | ✅ EC256/384, RSA2048-4096; ML-DSA refused | ✅ ec-256/384, 2048 | ⬜ | ✅ EC, RSA |
+| http-01 own web server / webroot | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | — / ✅ | — / ✅ |
+| dns-01 RFC 2136: record written / certificate | ✅ / ❌ V-1 | ✅ / ❌ V-1 | ✅ / ❌ V-1 | ⬜ hook | ⬜ hook |
+| Wildcard / 16 SANs | ❌ V-1 / ✅ | ❌ V-1 / ✅ | ❌ V-1 / ✅ | ⬜ / ✅ | ⬜ / ✅ |
+| IP identifiers v4 / v6 (RFC 8738) | — | ✅ / ✅ | ✅ / ✅ | — (sends an address as "dns": refused ✅) | ✅ / ✅ |
+| Own CSR | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Certificate keys ec256/ec384/rsa2048/3072/4096 | ✅ | ✅ | ✅ | ✅ (no 3072) | ✅ |
+| Profiles (preferred / required) | ✅ / ✅ | ✅ | — | — | — |
+| Renewal forced / `replaces` (RFC 9773) | ✅ / — | ✅ / ✅ | ✅ / — | ✅ / — | ✅, window read / — |
+| Revoke by account, reason, in the CRL / by certificate key | ✅ / ✅ | ✅ / — | ✅ / — | ✅ / ⬜ | ✅ / ✅ |
+| tls-alpn-01 only → clean "no challenge for it" | — | ✅ | ✅ | ⬜ | ⬜ |
+| Refused: `rejectedIdentifier` / `externalAccountRequired` / wrong answer | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ | ✅ / ⬜ / ✅ | ✅ / ✅ / ✅ |
 
 **lego is a first-class peer**: it implements the most of the extensions the
-PKI has (IP identifiers, ARI, profiles, EAB, RFC 2136) and tls-alpn-01, which
-the PKI does not — so it covers the most cells, positive and negative.
+PKI has (IP identifiers, ARI, profiles, EAB, RFC 2136, key rollover) and
+tls-alpn-01, which the PKI does not — so it covers the most cells, positive
+and negative. uacme is the second: key rollover, revocation by the
+certificate's key, ARI's window.
 
-Every cell asserts, independently of the PKI's own view: SAN set = requested;
-chain verifies to the PKI root with `openssl verify`; key type and size as
-asked; EKU serverAuth; AKI present; the account and the certificate appear in
-`v1/pki/acme/accounts`; a revoked certificate is in the CRL. Client logs
-(certbot's `letsencrypt.log`, lego's stdout) go into `artifacts/` on failure.
+Every cell asserts, independently of the PKI's own view: the names of the
+leaf by .NET, exactly the ones asked for; the chain verified to the PKI's
+root by `openssl verify -purpose sslserver`; key type and size as asked;
+EKU serverAuth; AKI present; the certificate kept by the PKI as issued (its
+state in-process, `ServerIssued`); a revoked certificate held revoked, for
+its reason, and listed by the PKI's CRL (`openssl verify -crl_check`). What
+the client said - its output, certbot's `letsencrypt.log`, acme.sh's log,
+BIND's log - is the evidence of a red cell.
 
 ### 4.6 Interop B (`PKIInterop.ACMEServers.Tests`) — Hermod → real servers ⬜
 
@@ -461,18 +506,20 @@ README.md  PLAN.md  FINDINGS.md  [MUTATION.md]  LICENSE  SECURITY.md  redo.sh
 .gitattributes  .gitignore
 build/
   CommonTestSettings.props          net11.0, NUnit 5, analyzers (as DNS/SMTP/NTS)
+  test-in-wsl.sh                    the suite natively in WSL, from a copy in the Linux file system
+  bench-namespace.sh                a run where the bench's names resolve to the loopback (no root)
   peers/                            setup-wsl.sh (--check), pins.env (versions + SHA-256),
-                                    bind/named.conf.template, pebble/*.json, step-ca/*.json,
+                                    later pebble/*.json, step-ca/*.json,
                                     boulder/compose.override.yml
 src/
   PKIConformance.Core/
     RawACME/                        JWS, JWK, thumbprint, EAB, key change, CSR reader, ARI id
     Scripted/                       RawACMEClient, ScriptedChallengeHost, ScriptedDNSServer, ScriptedACMEServer,
                                     BenchCA (issues with .NET alone), BenchClock (a TimeProvider that writes every wait down)
-    Fixtures/                       PKIACMEFixture (in-process PKI), BindFixture, PebbleFixture,
-                                    StepCAFixture, BoulderFixture, CertbotPeer, LegoPeer,
-                                    AcmeShPeer, RecordingProxy
-    Wsl.cs  TestEnvironment.cs  TestCategories.cs  OpenSSL.cs
+    Servers/                        IACMEServerUnderTest, PKIACMEServer (in-process PKI), BenchTLS
+    Peers/                          Peer, Lego, Certbot, AcmeSh, Dehydrated, Uacme, Bind (BIND 9 with RFC 2136);
+                                    later PebbleFixture, StepCAFixture, BoulderFixture, RecordingProxy
+    Wsl.cs  TestEnvironment.cs  TestCategories.cs  OpenSSL.cs  BenchNames.cs
 conformance/
   PKIConformance.ACME.Codec.Tests/
   PKIConformance.ACME.Server.Tests/
@@ -542,7 +589,7 @@ enrolment protocols (EST, RFC 7030) later, without renaming anything.
 | 1 ✅ | *Done 2026-11-26: 87 tests, no finding.* `RawACME` (`src/PKIConformance.Core/RawACME`: base64url, JWK, thumbprint, JWS, key authorization, EAB, key change, ARI id) + Codec tests | all RFC vectors green; Hermod ↔ RawACME ↔ PKI sign/verify in every direction |
 | 2 ✅ | *Done 2026-11-26: 224 server and 40 validation tests, round 1 of the findings: S-1 to S-13 and V-1, 14 in all.* `RawACMEClient`, `ScriptedChallengeHost`, `ScriptedDNSServer`, `RawCSR`; Server + Validation conformance | ~150 tests; first findings round for the PKI |
 | 3 ✅ | *Done 2026-11-26: 166 client tests, round 2 of the findings: C-1 to C-11 and M-1 to M-3, 14 in all; a tracker for every client ToDo.* `ScriptedACMEServer`, `BenchCA`, `BenchClock`; Client conformance | ~80 tests; first findings round for Hermod |
-| 4 | Interop A: certbot, acme.sh, dehydrated, uacme (Debian) and **lego** (pinned upstream v5) → PKI; BIND/RFC 2136 | matrix §4.5 filled except the ARI cells of certbot |
+| 4 🔶 | *2026-11-27: 122 interop tests natively in WSL, 116 green, the 6 red ones dns-01 at V-1; no new finding. Not built yet: dns-01 by the hooks of dehydrated and uacme, certbot's account keys, dehydrated's revocation by key, tls-alpn-01 of dehydrated and uacme.* Interop A: certbot, acme.sh, dehydrated, uacme (Debian) and **lego** (pinned upstream v5) → PKI; BIND/RFC 2136; `bench-namespace.sh` | matrix §4.5 filled except the ARI cells of certbot |
 | 5 | Interop B: Hermod → Pebble (+ nonce storm), step-ca; certbot-vs-Pebble reference layout; Boulder in Docker | matrix §4.6 filled |
 | 6 | Upstream tier with pins; `InteropReport` → `docs/INTEROP-MATRIX.md`; nightly lanes incl. `against-submodule-masters` | matrix generated, nightly green |
 | 7 | Optional: Posh-ACME and win-acme on the **Windows** leg (no WSL on hosted runners — real interop there too), Python `acme` driver for what no CLI does (key change, authz deactivation), Let's Encrypt staging, mutation sweep (`MUTATION.md`), JWS/JSON fuzzing of the PKI | as far as useful |

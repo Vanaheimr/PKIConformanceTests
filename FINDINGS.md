@@ -63,6 +63,11 @@ way through the same `DNSClient` and gets every record.
 
 Tests: `DNS01ValidationTests` (all 14; each also checks that the validation
 name was asked for, so that none of them passes because nothing was asked).
+And by three clients of other hands, each with its own DNS plugin writing
+into BIND by RFC 2136 - the records arrive (`*_Writes_Its_dns01_Record_By_RFC_2136`,
+green), the PKI never asks: `CertbotTests.Certbot_Gets_A_Certificate_By_dns01`,
+`LegoTests.Lego_Gets_A_Certificate_By_dns01`, `AcmeShTests.AcmeSh_Gets_A_Certificate_By_dns01`
+(a name and a wildcard each, 6).
 
 #### S-1
 
@@ -518,3 +523,9 @@ Where RFC 8555 does not settle a question, the reading the suite takes, and why.
   only that the answer is served at no other path than the token's own.
 - **"Provide to their operator"** (RFC 9773, section 4.2): through the
   logger, a property or an event - whatever an operator can read (M-3).
+- **What a peer's version lacks is no finding of anybody's** (phase 4): a
+  client that sends no "replaces" (uacme 1.7.6, a SHOULD of RFC 9773) or
+  has no IP identifiers (certbot 4.0.0) is a grey cell of the matrix.
+  dehydrated 0.7.2 ordering an address as a "dns" identifier is its own
+  mistake, which the PKI answers rightly as malformed - a refusal cell,
+  green.
