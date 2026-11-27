@@ -18,9 +18,8 @@ suite's own, RFC vectors, openssl, and the peers.
 - [PLAN.md](PLAN.md) - what is tested, how, in which order, and the ToDos
 - [FINDINGS.md](FINDINGS.md) - where the implementations deviate from the RFCs
 
-**State (2026-11-27, PKI `ba8324a9`, Hermod `0a93a6fb`):** phases 0 to 3
-and 5 done, phases 4 and 6 nearly (the nightly has not run yet) - natively
-in WSL 720 ✅ · 100 ❌ of 820 (87 codec, 239 server, 40 validation, 168
+**State (2026-11-27, PKI `ba8324a9`, Hermod `0a93a6fb`):** phases 0 to 3,
+5 and 6 done, phase 4 nearly, the nightly green - natively in WSL 720 ✅ · 100 ❌ of 820 (87 codec, 239 server, 40 validation, 168
 client, 178 interop of five real clients against the PKI - certbot 4.0.0
 and 5.10.0, lego 5.7.0, acme.sh 3.1.1 and 3.1.7, dehydrated 0.7.2, uacme
 1.7.6 - and 108 of Hermod against four real servers - Pebble 2.6.0 and
