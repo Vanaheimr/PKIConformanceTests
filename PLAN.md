@@ -247,6 +247,60 @@ Status legend: ✅ done · 🔶 in progress · ⬜ planned · 📋 optional / do
   skip failed the step - Boulder's first lane on GitHub, 19 of 19 green, was
   red for it. The grep is `|| true` now.
 
+### Learned in phase 7
+
+- **A fuzzer finds, a test pins**: every kind of wrong answer the fuzzer
+  turned up got a test of its own, red, before it became a finding - and
+  the fuzzer then knows it (`FuzzTests.Known`), so that it gates on every
+  other path and stays green of the known ones. Seeded by the case's name
+  (FNV-1a: `String.GetHashCode` changes with every process), so that the
+  change it reports is the reproduction.
+- **Newtonsoft's `JsonConvert.DeserializeObject` closes what a text leaves
+  open**: an object cut short of its brace is an object to it, and a NUL
+  between tokens is whitespace (S-17). `JObject.Parse` refuses the first.
+- **`System.Buffers.Text.Base64Url` takes whitespace as it takes padding**
+  (S-14, S-1): a signature with a space in it verifies, as the signing
+  input is the text of the protected header and the payload alone.
+- **CNG throws what OpenSSL does not**: `CertificateRequest.LoadSigningRequest`
+  of a point off its curve is a PlatformNotSupportedException on Windows and
+  a CryptographicException on Linux - S-3's pattern again, one leg, two tests
+  that skip on the other. Of a curve nobody knows it is a
+  PlatformNotSupportedException on both (S-19): an assumption of one leg is
+  to be run on the other before it is written down - the first take of S-19
+  had both halves Windows-only, and the run in WSL said otherwise.
+- **Windows PowerShell 5.1 started by a process of PowerShell 7 inherits
+  7's PSModulePath**, and then loads 7's Microsoft.PowerShell.Security of
+  the same name and fails: the peer takes PSModulePath away.
+- **Posh-ACME tells poshac.me of every finalize** unless
+  `Set-PAServer -DisableTelemetry`; win-acme connects to its default ACME
+  server (ZeroSSL, as of 2.4.1) at every start, `--help` too, and writes
+  into C:\ProgramData\win-acme. Both run with settings of the test's now:
+  the server under test as the default, the configuration in the peer's
+  directory - win-acme from a copy of its own, as it reads settings.json
+  from beside wacs.exe alone.
+- **On a Windows left as it was, "localhost" is the one name that
+  resolves**, to both loopbacks: the Windows leg's certificates are of
+  addresses and of "localhost".
+- **win-acme asks for an address with a commonName of ""** (I-1), which
+  Boulder reads as none and the PKI as an identifier: a cell red at an
+  interop finding, which needs a fix on one side or the other.
+- **The mutation sweep runs in a mirror** of the repository: a block takes
+  hours, and the checkout stays usable - and no mutant is ever left in
+  `libs/PKI` by a sweep cut short.
+- **A survivor is read, not counted** ([MUTATION.md](MUTATION.md)): of the
+  130 survivors of 362 mutants, 13 were gaps in what the suite claims to
+  test. Most of the rest change nothing, sit behind V-1, or lie outside the
+  suite's reach: the operator's own API, time, persistence, races. What
+  they have in common is only visible line by line.
+- **The coverage matrix is a plan, the sweep is the check**: §4.2 listed
+  "CN not among the SANs" for finalize and `notBefore`/`notAfter` for new
+  orders, and no test had either. A test whose summary said "and the
+  account object says so" never looked at the account object. Each was a
+  survivor, and each is a test now.
+- **The operator's API survives whole**: every one of its 33 mutants, the
+  authorization checks among them, because the bench configures the PKI
+  in-process. That is the PKI's own tests' to cover, not an ACME suite's.
+
 ---
 
 ## 1. Guiding principles
@@ -423,14 +477,24 @@ the other way round: Linux refuses it, Windows does not (S-3).
 | 9773 §4.1 | ARI certificate ID | AKI.serial, serial with leading zero octet, vectors from the RFC |
 | 2986, 5280 | CSR | SAN set, CN length, key/signature algorithm, extensions; parsed with .NET's `CertificateRequest`, not Hermod |
 
-### 4.2 Server (`PKIConformance.ACME.Server.Tests`) — `RawACMEClient` → PKI ✅ 225
+### 4.2 Server (`PKIConformance.ACME.Server.Tests`) — `RawACMEClient` → PKI ✅ 310
 
 *Phase 2, 2026-11-26: 224 tests besides phase 0's 15 directory and nonce
 tests; 29 red on Windows, 28 natively in WSL, all of them findings S-1 to
 S-13 ([FINDINGS.md](FINDINGS.md)), tagged `KnownIssue`.* *2026-11-27: S-3's
 test is two since - one gating where the platform checks the point, one
 `KnownIssue` on Windows alone, each skipping on the other leg - as the
-nightly, on Linux, reported the one test closable every night.* Not covered yet:
+nightly, on Linux, reported the one test closable every night.* *Phase 7,
+2026-11-28: 310 tests, natively in WSL 251 green, 57 red, 2 skipped - the
+halves of S-3 and S-19 of Windows; on Windows, in the gate, 249 green and
+the 2 halves of Linux skipped. New: the fuzzer (`Fuzzing/FuzzTests`, 28 cases - the
+requests of every resource spoiled one change at a time, seeded, 200
+requests a case) and the tests of what it found, S-14 to S-19 (round 4 of
+[FINDINGS.md](FINDINGS.md)); and the tests of the gaps the mutation sweep
+found ([MUTATION.md](MUTATION.md)): a mailto of no single address, the
+agreement in the account object, an order's `notBefore`/`notAfter`, the
+"error" of a new order, a CSR whose commonName is not of the order, the
+keyIdentifier of an identifier of ARI.* Not covered yet:
 persistence across a restart, the revocation as the CRL and OCSP show it
 (by `openssl`), `Accept` variants of the download, rate limits and
 `subproblems` (T-S4, T-S7), EdDSA (T-S9).
@@ -505,7 +569,7 @@ one type.
 | EAB | kid and MAC as given, padding tolerated |
 | Manager | file layout and modes compared with what **certbot itself** writes (`live/`, `archive/`, `cert.pem`, `chain.pem`, `fullchain.pem`, `privkey.pem`) — the reference comes from a real certbot run against Pebble (§4.6) and is kept as a fixture |
 
-### 4.5 Interop A (`PKIInterop.ACMEClients.Tests`) — real clients → PKI 🔶 178
+### 4.5 Interop A (`PKIInterop.ACMEClients.Tests`) — real clients → PKI 🔶 230
 
 *Phase 4, 2026-11-27, natively in WSL: 122 tests - 111 of the matrix, the 6
 account tests of lego of phase 0, 5 of the bench itself - 116 green, 6 red,
@@ -564,6 +628,45 @@ PKI has (IP identifiers, ARI, profiles, EAB, RFC 2136, key rollover) and
 tls-alpn-01, which the PKI does not — so it covers the most cells, positive
 and negative. uacme is the second: key rollover, revocation by the
 certificate's key, ARI's window.
+
+*Phase 7, 2026-11-28: three more columns, beside the seven above - Python's
+acme, for what no client of the command line does, and the two clients of
+Windows, natively on Windows. 230 tests: 183 natively in WSL - the 178 of
+phase 6 and 5 of Python's acme - 173 green, 10 red at V-1 as before; 47
+natively on Windows, 45 green, 2 red at I-1. Python's acme 5.10.0 (certbot's library, from
+certbot's venv) is driven by a script of the suite's (`PythonACME.py`) that
+reports every answer of the server step by step: the PKI changes an
+account's key, gives up an authorization and then marks its order invalid,
+refuses a CSR of other names as badCSR and keeps the order ready, and
+revokes alice's certificate for bob, who proved its names, and not for
+mallory. Posh-ACME 4.35.0 (Windows PowerShell 5.1) and win-acme 2.4.1 run
+against the PKI in the test process on the loopback, with no WSL and no
+firewall between them, judged by the host's own openssl; their names are
+addresses and "localhost", the one name a Windows left as it was resolves.
+Every cell of Posh-ACME is green; win-acme's are but its certificates of
+addresses, red at I-1. The three new rows are of these clients alone.*
+
+✅ green · ❌ red, at a finding · — the client lacks it · ⬜ not built yet · ◻ not on
+this leg (no names on Windows but "localhost"; no port 80 without an administrator)
+
+| Feature | acme 5.10.0 (Python) | **Posh-ACME 4.35.0** | **win-acme 2.4.1** |
+|---|---|---|---|
+| Account: new + ToS + contact / EAB | – (certbot's) | ✅ / ✅ | ✅ / ✅ |
+| Account: new contact / deactivate | – (certbot's) | ✅ / ✅ | — / — (its menu alone) |
+| Account: key rollover (§7.3.5) | ✅ | ✅ | — |
+| Account key types | – (certbot's) | ✅ ec-256/384, 2048, 4096 | — (ES256 alone) |
+| **Authorization: deactivated (§7.5.2)** | ✅ order invalid, nothing issued | ✅ | — |
+| http-01 own web server / webroot | ✅ (acme.standalone) / – | ◻ / ✅ localhost | ◻ / ✅ localhost |
+| IP identifiers v4 / v6 (RFC 8738) | – | ✅ / ✅ | ❌ I-1 / ❌ I-1 |
+| Own CSR | – | ✅ | ✅ |
+| Certificate keys ec256/ec384/rsa2048/3072/4096 | – | ✅ | ✅ |
+| Profiles | – | ✅ | ✅ |
+| Renewal forced / `replaces` (RFC 9773) | – | ✅ / ✅ | ✅ / ✅ |
+| Renewal of its own when the window of ARI is due | – | ✅ | ✅ |
+| Revoke by account, reason, in the CRL / by certificate key | – | ✅ / ✅ | ✅ (no reason) / — |
+| **Revocation by an account that proved the names (§7.6)** | ✅ (and refused for one that did not) | – | – |
+| Refused: `rejectedIdentifier` / `externalAccountRequired` / wrong answer | – | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ |
+| **Refused: a CSR of other names (`badCSR`, §7.4)** | ✅ | – | – |
 
 Every cell asserts, independently of the PKI's own view: the names of the
 leaf by .NET, exactly the ones asked for; the chain verified to the PKI's
@@ -630,6 +733,17 @@ second, unrelated server stack; Boulder is Let's Encrypt's production code and
 the strongest evidence that Hermod works against Let's Encrypt - in the
 nightly's Docker lane, because its compose stack is heavy.
 
+*Phase 7, 2026-11-28: **Let's Encrypt's staging** itself, over the internet
+(`PKIInterop.PublicCAs.Tests`, category Online, opt-in, no CI): 4 tests, 4
+green, every exchange judged by RawACME as above. Hermod reads the
+directory - newNonce, newAccount, newOrder, revokeCert, renewalInfo, the
+terms - opens an account with the terms agreed, finds it again by its key
+(onlyReturnExisting, and a second newAccount answered 200 with the same
+URL), and finds none for a new key. A run opens two accounts of keys made
+for it, with no contact. Orders are not built: they need a public name with
+a DNS API (§10), and a key change and a deactivated account need Hermod's
+client to have them first (T-C3, T-C2).*
+
 ### 4.7 Baseline diagonal — Hermod ↔ PKI ⬜
 
 The existing scenarios of `PKITests/ACMETests` rerun here behind a recording
@@ -649,8 +763,10 @@ build/
   test-in-wsl.sh                    the suite natively in WSL, from a copy in the Linux file system
   bench-namespace.sh                a run where the bench's names resolve to the loopback (no root)
   peers/                            setup-wsl.sh (--check, --with-boulder, --only-boulder), pins.env (versions + SHA-256),
-                                    certbot-requirements.txt (certbot's venv, every package by its hashes)
+                                    certbot-requirements.txt (certbot's venv, every package by its hashes),
+                                    setup-windows.ps1 (-Check): Posh-ACME and win-acme for the Windows leg
   closable.sh                       which KnownIssue and ToDo tests pass: the nightly's summary
+  mutation/                         genmut.py (the mutants), sweep.py (a block, in a mirror), results/ (a verdict a mutant)
 src/
   PKIConformance.Core/
     RawACME/                        JWS, JWK, thumbprint, EAB, key change, CSR reader, ARI id
@@ -658,17 +774,19 @@ src/
                                     BenchCA (issues with .NET alone), BenchClock (a TimeProvider that writes every wait down)
     Servers/                        IACMEServerUnderTest, PKIACMEServer (in-process PKI), BenchTLS
     Peers/                          Peer, Lego, Certbot, AcmeSh, Dehydrated, Uacme, Bind (BIND 9 with RFC 2136);
+                                    PythonACME (+ PythonACME.py, the driver of Python's acme); PoshACME, WinAcme (Windows);
                                     Pebble, StepCA, Boulder, ChallTestSrv (IACMEServerPeer, IChallengeDNS),
                                     RecordingHandler, WireForm (the recorded exchanges judged by RawACME)
-    Wsl.cs  TestEnvironment.cs  TestCategories.cs  OpenSSL.cs  BenchNames.cs  Pins.cs  Fixtures.cs
+    Wsl.cs  Native.cs  TestEnvironment.cs  TestCategories.cs  OpenSSL.cs  BenchNames.cs  Pins.cs  Fixtures.cs
     InteropCells.cs  InteropMatrix.cs  the cells of the matrices; a test's [Cell], written into its output
 conformance/
   PKIConformance.ACME.Codec.Tests/
-  PKIConformance.ACME.Server.Tests/
+  PKIConformance.ACME.Server.Tests/   Fuzzing/: JSONMutator, FuzzTests - every resource's requests spoiled, seeded
   PKIConformance.ACME.Validation.Tests/
   PKIConformance.ACME.Client.Tests/
 interop/
-  PKIInterop.ACMEClients.Tests/     certbot and acme.sh (Debian's and upstream's), lego, dehydrated, uacme → PKI
+  PKIInterop.ACMEClients.Tests/     certbot and acme.sh (Debian's and upstream's), lego, dehydrated, uacme, Python's acme → PKI;
+                                    Posh-ACME, win-acme → PKI natively on Windows (WindowsInteropFixture)
   PKIInterop.ACMEServers.Tests/     Hermod → Pebble, step-ca, Boulder
   PKIInterop.PublicCAs.Tests/       Let's Encrypt staging (Online, opt-in)
 InteropReport/                      .trx → docs/INTEROP-MATRIX.md, by the cells the tests wrote (InteropCells.cs linked)
@@ -743,19 +861,26 @@ enrolment protocols (EST, RFC 7030) later, without renaming anything.
 | 4 🔶 | *2026-11-27: 122 interop tests natively in WSL, 116 green, the 6 red ones dns-01 at V-1; no new finding. Not built yet: dns-01 by the hooks of dehydrated and uacme, certbot's account keys, dehydrated's revocation by key, tls-alpn-01 of dehydrated and uacme.* Interop A: certbot, acme.sh, dehydrated, uacme (Debian) and **lego** (pinned upstream v5) → PKI; BIND/RFC 2136; `bench-namespace.sh` | matrix §4.5 filled except the ARI cells of certbot |
 | 5 ✅ | *Done 2026-11-27: 108 interop tests natively in WSL, Boulder in Docker; round 3 of the findings: M-4; C-7 seen by Pebble and Boulder. Not built yet: EAB of step-ca, IPv6 against Boulder, authorization reuse of step-ca and Boulder.* Interop B: Hermod → Pebble 2.6.0 and 2.10.3 (+ nonce storm, chains, alternate roots), step-ca, Boulder in Docker; certbot-vs-Pebble reference layout, kept as a fixture | matrix §4.6 filled |
 | 6 ✅ | *Done 2026-11-27: certbot 5.10.0 and acme.sh 3.1.7 pinned beside Debian's, both tiers gating; the cells of certbot's ARI and addresses and of acme.sh's ARI, "replaces" and profiles filled; every interop test declares its cell, `InteropReport` renders `docs/INTEROP-MATRIX.md`; the nightly with the red cells, a `matrix` job and `against-submodule-masters`. The nightly green in all four lanes, nothing skipped; its matrix the one here, 273 ✅ · 13 ❌ of 286 interop tests, every red one a finding. The first two runs were red at their checks of skips only ("Learned in phase 6").* Upstream tier with pins; `InteropReport` → `docs/INTEROP-MATRIX.md`; nightly lanes incl. `against-submodule-masters` | matrix generated, nightly green |
-| 7 | Optional: Posh-ACME and win-acme on the **Windows** leg (no WSL on hosted runners — real interop there too), Python `acme` driver for what no CLI does (key change, authz deactivation), Let's Encrypt staging, mutation sweep (`MUTATION.md`), JWS/JSON fuzzing of the PKI | as far as useful |
+| 7 ✅ | *Done 2026-11-28: Python's acme 5.10.0, driven by a script of the suite's, 5 tests green (key change, an authorization given up, badCSR, revocation by proof); the fuzzer of the PKI's server, 28 cases, round 4 of the findings: S-14 to S-19; Posh-ACME 4.35.0 and win-acme 2.4.1 natively on Windows, 47 tests, round 5: I-1, and the nightly's `windows` lane, not run on GitHub yet; Let's Encrypt staging, 4 tests green, opt-in; the mutation sweep of four blocks of the PKI, 362 mutants, the 130 survivors read one by one, 12 gaps closed by tests that kill them in pass 2, 1 open ([MUTATION.md](MUTATION.md)). The matrix 327 ✅ · 15 ❌ of 342 interop tests, every red one a finding.* Optional: Posh-ACME and win-acme on the **Windows** leg (no WSL on hosted runners — real interop there too), Python `acme` driver for what no CLI does (key change, authz deactivation), Let's Encrypt staging, mutation sweep (`MUTATION.md`), JWS/JSON fuzzing of the PKI | as far as useful |
 
 ---
 
 ## 8. Running the suite
 
 ```
-dotnet test PKIConformanceTests.slnx --filter "TestCategory!=Online&TestCategory!=WSL&TestCategory!=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
+dotnet test PKIConformanceTests.slnx --filter "TestCategory!=Online&TestCategory!=WSL&TestCategory!=Windows&TestCategory!=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
 dotnet test PKIConformanceTests.slnx --filter "TestCategory=WSL&TestCategory!=KnownIssue&TestCategory!=ToDo"
 dotnet test interop/PKIInterop.ACMEServers.Tests --filter "TestCategory=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
 dotnet test PKIConformanceTests.slnx --filter "TestCategory=KnownIssue|TestCategory=ToDo"
+dotnet test PKIConformanceTests.slnx --filter "TestCategory=Windows&TestCategory!=KnownIssue&TestCategory!=ToDo"
+dotnet test interop/PKIInterop.PublicCAs.Tests --filter "TestCategory=Online"
 dotnet run --project InteropReport -- <the TRX files of one run, or their directory>
+python build/mutation/sweep.py <jws|state|api|validator> [--survivors]
 ```
+
+`build/peers/setup-windows.ps1 -Check` lists what the Windows leg is missing.
+The Online run is opt-in: no CI runs it, and it opens two accounts at Let's
+Encrypt's staging.
 
 `build/peers/setup-wsl.sh --check` lists what is missing in WSL and how to get it.
 
@@ -778,7 +903,10 @@ offline set. `nightly.yml`:
   (`build/closable.sh`) in the job's summary;
 - `boulder` - the Docker lane on the runner itself (Boulder by
   `setup-wsl.sh --only-boulder`), red on any skip, and its KnownIssue;
-- `matrix` - `InteropReport` over the TRX files of both, into the job's
+- `windows` - the peers of Windows, Posh-ACME and win-acme, natively on
+  `windows-latest` (by `setup-windows.ps1`), red on any skip, and their
+  KnownIssue;
+- `matrix` - `InteropReport` over the TRX files of the three, into the job's
   summary and an artifact; red at an unexplained red test;
 - `against-submodule-masters` - every submodule at its master, how many
   commits past its pin and which, the offline set and the WSL set red on any
@@ -807,3 +935,7 @@ Decided on 2026-11-26 and 2026-11-27: see §0. Still open:
 
 1. **Let's Encrypt staging**: is there a public test name with a DNS API whose
    credentials could live in a CI secret? Without one, Layer 4 stays manual.
+   *Phase 7: what needs no name runs, opt-in (`PKIInterop.PublicCAs.Tests`,
+   category Online): the directory and accounts. Orders, and with them
+   authorizations, certificates, revocation and ARI, still wait for such a
+   name.*

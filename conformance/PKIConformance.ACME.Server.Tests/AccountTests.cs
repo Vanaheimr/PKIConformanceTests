@@ -224,6 +224,9 @@ public class AccountTests(String ServerName) : ACMEServerFixture(ServerName)
     [TestCase("mailto:admin@example.org,other@example.org",    Description = "two addr-specs")]
     [TestCase("mailto:",                                       Description = "no address")]
     [TestCase("mailto:nobody",                                 Description = "no domain")]
+    [TestCase("mailto:@example.org",                           Description = "no local part")]
+    [TestCase("mailto:admin@",                                 Description = "nothing after the @")]
+    [TestCase("mailto:admin@example.org,",                     Description = "a comma and no second address")]
     [Property("Level", "SHOULD")]
     public async Task A_mailto_That_Is_No_Single_Address_Is_invalidContact(String Contact)
     {

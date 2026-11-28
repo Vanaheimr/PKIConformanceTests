@@ -148,4 +148,88 @@ public static class OpenSSL
 
     }
 
+
+    #region Native: the host's own openssl, for the Windows leg
+
+    /// <summary>
+    /// The host's own openssl - on Windows Git's, or the runner's - which
+    /// judges the Windows leg, where there is no WSL; or null.
+    /// </summary>
+    public static String? NativeExecutable
+        => nativeExecutable.Value;
+
+    private static readonly Lazy<String?> nativeExecutable = new (() => Native.Find(OperatingSystem.IsWindows() ? "openssl.exe" : "openssl"));
+
+    /// <summary>What the host's <c>openssl version</c> says.</summary>
+    public static String NativeVersion
+        => nativeVersion.Value;
+
+    private static readonly Lazy<String> nativeVersion = new (() => NativeExecutable is String openssl
+                                                                         ? Native.Run(openssl, [ "version" ], Timeout: TimeSpan.FromSeconds(15)).StdOut.Trim()
+                                                                         : "no openssl on the PATH");
+
+    /// <summary>
+    /// <see cref="Verify"/> by the host's own openssl: the leaf with the
+    /// intermediates of its chain against the root, with <c>-crl_check</c>
+    /// where a CRL is given.
+    /// </summary>
+    public static Wsl.Result VerifyNative(String   RootPEM,
+                                          String   ChainPEM,
+                                          Byte[]?  CRL = null)
+    {
+
+        var openssl   = NativeExecutable ?? throw new InvalidOperationException("No openssl on the PATH.");
+        var directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"pkiconformance-openssl-{Guid.NewGuid():N}")).FullName;
+
+        try
+        {
+
+            var certificates = new X509Certificate2Collection();
+            certificates.ImportFromPem(ChainPEM);
+
+            if (certificates.Count == 0)
+                return new Wsl.Result(-1, "", "no certificate in the chain");
+
+            var root      = Path.Combine(directory, "root.pem");
+            var leaf      = Path.Combine(directory, "leaf.pem");
+            var chain     = Path.Combine(directory, "chain.pem");
+            var untrusted = String.Concat(certificates.Skip(1).Select(certificate => certificate.ExportCertificatePem() + "\n"));
+
+            File.WriteAllText(root, RootPEM);
+            File.WriteAllText(leaf, certificates[0].ExportCertificatePem() + "\n");
+
+            List<String> arguments = [ "verify", "-purpose", "sslserver", "-CAfile", root ];
+
+            if (untrusted.Length > 0)
+            {
+                File.WriteAllText(chain, untrusted);
+                arguments.AddRange([ "-untrusted", chain ]);
+            }
+
+            if (CRL is not null)
+            {
+                var der = Path.Combine(directory, "issuer.crl");
+                var pem = Path.Combine(directory, "issuer.crl.pem");
+                File.WriteAllBytes(der, CRL);
+                Native.Run(openssl, [ "crl", "-inform", "DER", "-in", der, "-out", pem ], Timeout: TimeSpan.FromSeconds(15));
+                arguments.AddRange([ "-crl_check", "-CRLfile", pem ]);
+            }
+
+            arguments.Add(leaf);
+
+            var result = Native.Run(openssl, arguments, Timeout: TimeSpan.FromSeconds(30));
+
+            // As Verify has it: "<file>: OK" - the file by its name alone.
+            return result with { StdOut = result.StdOut.Replace(leaf, "leaf.pem") + result.StdErr };
+
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch (IOException) { }
+        }
+
+    }
+
+    #endregion
+
 }

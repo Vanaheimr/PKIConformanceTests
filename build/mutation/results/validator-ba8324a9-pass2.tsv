@@ -1,0 +1,8 @@
+libs/PKI/PKI/Enrollment/ACMEValidator.cs	88	false-to-true	SURVIVED		0	UseProxy                   = false,	UseProxy                   = true,
+libs/PKI/PKI/Enrollment/ACMEValidator.cs	89	false-to-true	SURVIVED		0	UseCookies                 = false,	UseCookies                 = true,
+libs/PKI/PKI/Enrollment/ACMEValidator.cs	91	true-to-false	SURVIVED		0	SslOptions                 = { RemoteCertificateValidationCallback = (_, _, _, _) => true }	SslOptions                 = { RemoteCertificateValidationCallback = (_, _, _, _) => false }
+libs/PKI/PKI/Enrollment/ACMEValidator.cs	102	true-to-false	SURVIVED		0	ForceUpdate:        true,	ForceUpdate:        false,
+libs/PKI/PKI/Enrollment/ACMEValidator.cs	145	negation-removed	KILLED	1 failed: A_Host_That_Never_Answers_Is_No_Proof	0	catch (OperationCanceledException) when (!CancellationToken.IsCancellationRequested)	catch (OperationCanceledException) when (CancellationToken.IsCancellationRequested)
+libs/PKI/PKI/Enrollment/ACMEValidator.cs	186	less-to-less-or-equal	SURVIVED		0	while (length < buffer.Length)	while (length <= buffer.Length)
+libs/PKI/PKI/Enrollment/ACMEValidator.cs	238	equality-to-inequality	SURVIVED		0	if (records.Count == 0)	if (records.Count != 0)
+libs/PKI/PKI/Enrollment/ACMEValidator.cs	241	equality-to-inequality	SURVIVED		0	return records.Any(record => record.Trim() == expected)	return records.Any(record => record.Trim() != expected)

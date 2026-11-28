@@ -11,6 +11,7 @@
   <Folder Name="/interop/">
     <Project Path="interop/PKIInterop.ACMEClients.Tests/PKIInterop.ACMEClients.Tests.csproj" />
     <Project Path="interop/PKIInterop.ACMEServers.Tests/PKIInterop.ACMEServers.Tests.csproj" />
+    <Project Path="interop/PKIInterop.PublicCAs.Tests/PKIInterop.PublicCAs.Tests.csproj" />
   </Folder>
   <Folder Name="/libs/" />
   <Folder Name="/libs/Hermod/">

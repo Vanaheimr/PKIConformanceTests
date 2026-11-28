@@ -179,6 +179,27 @@ public class RevocationTests(String ServerName) : ACMEServerFixture(ServerName)
     }
 
     /// <summary>
+    /// The same of a "reason" beyond 32 bits, and so none of RFC 5280's:
+    /// badRevocationReason, not the server's error. (One beyond a double, an
+    /// array and an object are refused so.)
+    /// </summary>
+    [TestCase("4294967296",          Description = "2^32")]
+    [TestCase("9223372036854775808", Description = "2^63")]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-18")]
+    public async Task A_Reason_Beyond_Every_reasonCode_Is_badRevocationReason(String Reason)
+    {
+
+        var (account, issued) = await IssuedAsync();
+
+        AssertProblem(await Client.PostAsync(account, RevokeCertURL,
+                                             RawJson.Object(("certificate", RawJson.Quote(RawBase64Url.Encode(issued.LeafDER))), ("reason", Reason))),
+                      400, "badRevocationReason");
+
+    }
+
+    /// <summary>
     /// <i>"The server MAY disallow a subset of reasonCodes from being used by
     /// the user. If a request contains a disallowed reasonCode, then the server
     /// MUST reject it with the error type
@@ -231,6 +252,33 @@ public class RevocationTests(String ServerName) : ACMEServerFixture(ServerName)
 
         var answer  = await Client.PostAsync(account, RevokeCertURL, RawJson.Object(("certificate", RawJson.Quote(padded)), ("reason", "1")));
         var control = await Client.PostAsync(account, RevokeCertURL, Payload(issued.LeafDER, 1));
+
+        Assert.Multiple(() => {
+            AssertProblem(answer, 400, "malformed");
+            AssertStatus(control, 200);
+        });
+
+    }
+
+    /// <summary>
+    /// The certificate with a line break in it, as base64 of MIME has them -
+    /// which base64url of RFC 7515, section 2, is <i>"without the inclusion of
+    /// any line breaks, whitespace, or other additional characters"</i>; and
+    /// then as it should be, revoked.
+    /// </summary>
+    [Test]
+    [Property("RFC", "8555 §7.6, 7515 §2")]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-14")]
+    public async Task A_Certificate_With_Whitespace_Is_Refused()
+    {
+
+        var (account, issued) = await IssuedAsync();
+        var encoded           = RawBase64Url.Encode(issued.LeafDER);
+
+        var answer            = await Client.PostAsync(account, RevokeCertURL, RawJson.Object(("certificate", RawJson.Quote(encoded[..64] + "\n" + encoded[64..])), ("reason", "1")));
+        var control           = await Client.PostAsync(account, RevokeCertURL, Payload(issued.LeafDER, 1));
 
         Assert.Multiple(() => {
             AssertProblem(answer, 400, "malformed");

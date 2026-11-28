@@ -81,10 +81,14 @@ The PKI decodes with `System.Buffers.Text.Base64Url.DecodeFromChars`, which
 takes padding: the protected header, payload and signature
 (`Enrollment/ACMEJWS.cs:228-234`), the CSR of finalize
 (`HTTPAPI/PKIHTTPAPI.ACME.cs:1211`, a certificate is issued of it) and the
-certificate of revoke-cert (`HTTPAPI/PKIHTTPAPI.ACME.cs:1350`). Fix: refuse a
-value with '=' before decoding it (malformed; badCSR for the CSR).
+certificate of revoke-cert (`HTTPAPI/PKIHTTPAPI.ACME.cs:1350`) - and, as the
+fuzzer found in phase 7, the coordinates of a "jwk"
+(`Enrollment/ACMEJWS.cs:528-529`): an account is opened for an "x" padded.
+Fix: refuse a value with '=' before decoding it (malformed; badCSR for the
+CSR; badPublicKey for the "jwk").
 
 Tests: `RequestAuthenticationTests.A_Part_Of_The_JWS_With_Padding_Is_Refused` (3),
+`...A_Coordinate_Of_The_jwk_With_Padding_Is_Refused`,
 `FinalizeTests.A_CSR_With_Padding_Is_Refused`,
 `RevocationTests.A_Certificate_With_Padding_Is_Refused`.
 
@@ -532,6 +536,180 @@ Tests: `CertbotReferenceTests.The_Managers_Files_End_With_A_Newline_As_Certbots`
 (against certbot's live/ itself), `CertificateManagerTests.The_Files_End_With_A_Newline_As_Certbot_Writes_Them`
 (offline, against the fixture).
 
+### Round 4 - the PKI's server, fuzzed (phase 7, 2026-11-27, PKI `ba8324a9`)
+
+Found by `FuzzTests`: the requests of every resource, spoiled one change at
+a time - their payload and their protected header signed as they are, their
+serialization not signed again - and each kind of wrong answer pinned by a
+test of its own before it became a finding. Python's acme, which asks the
+PKI what no client of the command line does (a key change, an authorization
+given up, a CSR of other names, a revocation by proof), found nothing.
+Paths below are relative to `libs/PKI/PKI/`.
+
+| ID | Level | In short |
+|---|---|---|
+| [S-14](#s-14) | MUST | base64url with whitespace in it is taken: the signature, a coordinate of the "jwk", the CSR, the certificate of a revocation |
+| [S-15](#s-15) | MUST | an "alg", or a member of the "jwk", that is no string is a 500 serverInternal |
+| [S-16](#s-16) | MUST | a "jwk" that is no object beside a "kid", or a "kid" of null beside a "jwk", is taken: a request with both |
+| [S-17](#s-17) | MUST | a body or a payload cut short of its closing brace, or with a NUL in it, is taken as JSON |
+| [S-18](#s-18) | MUST | a "reason" of revokeCert beyond 32 bits is a 500 serverInternal, not badRevocationReason |
+| [S-19](#s-19) | SHOULD | a CSR of a key on a curve nobody knows is a 500 serverInternal, not badCSR - and on Windows one of a point off its curve |
+
+#### S-14
+
+RFC 7515, section 2: base64url is *"without the inclusion of any line
+breaks, whitespace, or other additional characters"*, and section 5.2, step
+7: *"Base64url-decode the encoded representation of the JWS Signature,
+following the restriction that no line breaks, whitespace, or other
+additional characters have been used."*
+
+`System.Buffers.Text.Base64Url.DecodeFromChars` skips whitespace, as it
+takes padding (S-1): the signature (`Enrollment/ACMEJWS.cs:229`), the
+coordinates of a "jwk" (`Enrollment/ACMEJWS.cs:528-529`, and `n` and `e` at
+554-555), the CSR of finalize (`HTTPAPI/PKIHTTPAPI.ACME.cs:1211`) and the
+certificate of revoke-cert (`HTTPAPI/PKIHTTPAPI.ACME.cs:1350`). A request
+whose signature has a space, a tab or a line break in it is taken, a CSR or
+a certificate with a line break in it is signed or revoked, an account is
+opened for a "jwk" whose "x" has a space in it. The protected header and the
+payload are safe by accident: the signing input is their text as sent.
+Fix: refuse a value with a character outside the alphabet of base64url
+before decoding it - S-1's fix with whitespace in it.
+
+Tests: `RequestAuthenticationTests.A_Signature_With_Whitespace_In_It_Is_Refused` (3),
+`...A_Coordinate_Of_The_jwk_With_Whitespace_Is_Refused` (2),
+`FinalizeTests.A_CSR_With_Whitespace_Is_Refused`,
+`RevocationTests.A_Certificate_With_Whitespace_Is_Refused`.
+
+#### S-15
+
+RFC 8555, section 6.2: *"If the client sends a JWS signed with an algorithm
+that the server does not support, then the server MUST return an error with
+status code 400 (Bad Request) and type
+"urn:ietf:params:acme:error:badSignatureAlgorithm"."* and *"If the server
+supports the signature algorithm "alg" but either does not support or
+chooses to reject the public key "jwk", then the server MUST return an
+error with status code 400 (Bad Request) and type
+"urn:ietf:params:acme:error:badPublicKey"."*
+
+`Enrollment/ACMEJWS.cs:159` reads "alg" as `Header.Value<String>("alg")`,
+which throws for an array, an object or an integer beyond 64 bits - in the
+constructor, which `Parse` calls (`:253`) after its try. The members of the
+"jwk" are read so as well (`Enrollment/ACMEJWS.cs:380`, `Check`, and
+`ECKeyOf` from `:503`). Nothing catches it, and `HTTPAPI/PKIHTTPAPI.ACME.cs:1552`
+answers 500 serverInternal - for every resource, as the fuzzer found. A
+"jwk" member of a string, a number or null is refused rightly. Fix: take
+"alg" and the members of the "jwk" only where they are strings, malformed
+or badPublicKey otherwise.
+
+Tests: `RequestAuthenticationTests.An_alg_That_Is_No_String_Is_badSignatureAlgorithm` (4),
+`...A_Member_Of_The_jwk_That_Is_No_String_Is_badPublicKey` (4).
+
+#### S-16
+
+RFC 8555, section 6.2: *"The "jwk" and "kid" fields are mutually
+exclusive. Servers MUST reject requests that contain both."*
+
+`Enrollment/ACMEJWS.cs:160-161` keeps the "jwk" only where it is an object
+and the "kid" only where it is a string, and `:266` asks whether there is
+one of them: a "jwk" of `""`, `-1`, `[]` or null beside the "kid" of the
+account is no "jwk" to it, and the request is taken as the account's; a
+newAccount request with a "kid" of null beside its "jwk" opens an account.
+Fix: ask for the members' presence (`Header.ContainsKey`), and refuse a
+"jwk" that is no object and a "kid" that is no string as malformed.
+
+Tests: `RequestAuthenticationTests.A_Request_With_A_kid_And_A_jwk_That_Is_No_Key_Is_Refused` (4),
+`...A_Request_With_A_jwk_And_A_kid_Of_null_Is_Refused`.
+
+#### S-17
+
+RFC 8555, section 6.2: *"The JWS MUST be in the Flattened JSON
+Serialization [RFC7515]"*, and RFC 7515, section 5.2, step 3, of the
+protected header: *"Verify that the resulting octet sequence is a
+UTF-8-encoded representation of a completely valid JSON object"*. A text
+cut short of its closing brace is no JSON text (RFC 8259, section 2), and
+neither is one with a NUL between its tokens.
+
+`Enrollment/ACMEJWS.cs:185` reads the body, and `:238` the payload, with
+Newtonsoft's `JsonConvert.DeserializeObject`, whose serializer ends an
+object where the text ends and reads past a NUL; the protected header's
+`JObject.Parse` (`:228`) reads past a NUL between tokens too, and refuses a
+header cut short. A request without the closing brace of its body is
+taken, and so is a newAccount request whose payload has none. Fix: read
+with a `JsonTextReader` that must be at its end afterwards, and refuse a
+text with U+0000 in it.
+
+Tests: `RequestAuthenticationTests.A_Body_That_Is_No_JSON_Text_Is_Refused` (2),
+`...A_Part_Of_The_JWS_That_Is_No_JSON_Text_Is_Refused` (3).
+
+#### S-18
+
+RFC 8555, section 7.6: *"If a request contains a disallowed reasonCode,
+then the server MUST reject it with the error type
+"urn:ietf:params:acme:error:badRevocationReason"."*
+
+`HTTPAPI/PKIHTTPAPI.ACME.cs:1401` takes an integer token as
+`reasonToken.Value<Int32>()`, which overflows for 2^32 and beyond; the
+OverflowException is answered 500 serverInternal. One beyond a double, an
+array and an object are refused rightly as badRevocationReason. Fix:
+`TryGetInt32`-like reading, badRevocationReason for anything else.
+
+Tests: `RevocationTests.A_Reason_Beyond_Every_reasonCode_Is_badRevocationReason` (2).
+
+#### S-19
+
+RFC 8555, section 7.4: *"In such cases, the problem document returned by
+the server SHOULD use error code "badCSR""* - for a CSR the CA is unwilling
+to sign, as one of a key that is none: of a curve nobody knows
+(1.2.840.10045.3.1.11), or a point off P-256.
+
+`HTTPAPI/PKIHTTPAPI.ACME.cs:1214` catches FormatException and
+CryptographicException of `CertificateRequest.LoadSigningRequest`. For a
+curve nobody knows, .NET throws a PlatformNotSupportedException on every
+platform ("The specified curve '1.2.840.10045.3.1.11' or its parameters are
+not valid for this platform" on Linux, "The specified Oid ... is not valid"
+on Windows), which is answered 500 serverInternal. For a point off P-256,
+OpenSSL throws a CryptographicException ("point is not on curve") and the
+answer is badCSR, while CNG throws a PlatformNotSupportedException again:
+that half is of **Windows only**, as S-3. Fix: catch
+PlatformNotSupportedException there too.
+
+Tests: `FinalizeTests.A_CSR_Of_A_Key_On_A_Curve_Nobody_Knows_Is_badCSR`;
+`...A_CSR_Of_A_Point_Off_Its_Curve_Is_badCSR_On_Windows`, which skips
+elsewhere, and `...A_CSR_Of_A_Point_Off_Its_Curve_Is_badCSR`, the gating
+test of the other platforms, which skips on Windows.
+
+### Round 5 - clients of Windows (phase 7, 2026-11-27, PKI `ba8324a9`)
+
+Posh-ACME 4.35.0 and win-acme 2.4.1 natively on Windows, against the PKI
+on the loopback. Every cell of Posh-ACME is green; win-acme's are but its
+certificates of addresses, where the two sides do not meet.
+
+| ID | Level | In short |
+|---|---|---|
+| [I-1](#i-1) | — (interop) | win-acme asks for an address with a commonName of the empty string, which the PKI takes for an identifier |
+
+#### I-1
+
+RFC 5280, Appendix A: *"X520CommonName ::= CHOICE { ... utf8String
+UTF8String (SIZE (1..ub-common-name)) ..."* - a commonName has a character
+at least. RFC 8555, section 7.4: *"The CSR MUST indicate the exact same set
+of requested identifiers as the initial newOrder request."*
+
+win-acme 2.4.1 - built of simple-acme 2.4.1, `src/main.lib/Plugins/CsrPlugins/CsrPlugin.cs`,
+`CommonName` - puts a commonName into every CSR, the empty string where the
+order has no DNS name, as one of addresses alone. The PKI takes the
+commonName of a CSR as an identifier asked for (`HTTPAPI/PKIHTTPAPI.ACME.cs:1238-1246`),
+the empty one too, and refuses: badCSR, *"The CSR asks for , 127.0.0.1, and
+the order is for 127.0.0.1."* Boulder reads a commonName of "" as none
+(`csr/csr.go:109`, `if csr.Subject.CommonName != ""`), so win-acme's
+certificate of an address is one Let's Encrypt issues and the PKI does
+not. Each side has a part: win-acme's CSR is outside RFC 5280, the PKI
+counts what is no identifier. Fix, on either side: the PKI to take an empty
+commonName as none, as Boulder does; win-acme to leave the commonName out
+where there is no name for it.
+
+Tests: `WinAcmeTests.WinAcme_Gets_A_Certificate_Of_An_Address` (2).
+
 ## Closed
 
 None yet.
@@ -590,6 +768,19 @@ Where RFC 8555 does not settle a question, the reading the suite takes, and why.
   alone, and Hermod talks to it as it is given; lego 5 refuses one. The
   section describes and does not bid a client refuse - no finding, and the
   Boulder lane is the only one on HTTP.
+- **A 5xx for the client's error** (phase 7; RFC 9110, section 15.6: *"the
+  server is aware that it has erred"*): the fuzzer counts every one a wrong
+  answer. It is a finding of the level of the RFC sentence that names the
+  client's error for the request - badSignatureAlgorithm and badPublicKey
+  (S-15) and badRevocationReason (S-18) are MUSTs, badCSR (S-19) a SHOULD.
+  The fuzzer's own test is of the level SHOULD, and stays green of every
+  known finding: their tests are the red ones.
+- **A request taken whose text changed and whose content did not** (phase
+  7): a signature with a space in it decodes to the same octets, a body
+  without its closing brace to the same object. Still a finding (S-14,
+  S-17): RFC 7515 and 8555 say how the text is to be, and two parsers that
+  read one request apart are where an attack lives - the very thing a
+  signature is to rule out.
 - **step-ca's CRL against its certificates** (RFC 5280, section 6.3.3): it
   has an issuing distribution point and they have no distribution point to
   match, which openssl's `-crl_check` refuses as "different CRL scope". That

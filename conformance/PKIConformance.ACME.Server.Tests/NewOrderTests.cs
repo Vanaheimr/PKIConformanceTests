@@ -49,7 +49,9 @@ public class NewOrderTests(String ServerName) : ACMEServerFixture(ServerName)
     /// [...] This field is REQUIRED for objects with "pending" or "valid" in the
     /// status field."</i>, <i>"identifiers (required, array of object)"</i>,
     /// <i>"authorizations (required, array of string)"</i>, <i>"finalize
-    /// (required, string)"</i>.
+    /// (required, string)"</i> - and no <i>"error (optional, object): The
+    /// error that occurred while processing the order, if any."</i>, of an
+    /// order where none occurred yet.
     /// </summary>
     [Test]
     [Property("RFC", "8555 §7.4, §7.1.3")]
@@ -68,7 +70,47 @@ public class NewOrderTests(String ServerName) : ACMEServerFixture(ServerName)
             Assert.That(answer.Object?["identifiers"]?.AsArray().Count,               Is.EqualTo(2),            answer.ToString());
             Assert.That(answer.StringsOf("authorizations"),                           Has.Count.EqualTo(2),     $"one authorization of each name: {answer}");
             Assert.That(answer.StringOf("finalize"),                                  Is.Not.Null,              answer.ToString());
+            Assert.That(answer.Object?.ContainsKey("error"),                          Is.False,                 $"no error: {answer}");
         });
+
+    }
+
+    /// <summary>
+    /// Section 7.4: <i>"notBefore (optional, string): The requested value of
+    /// the notBefore field in the certificate"</i>, the same of notAfter - and
+    /// <i>"The server MUST return an error if it cannot fulfill the request as
+    /// specified, and it MUST NOT issue a certificate with contents other than
+    /// those requested."</i> An order that asks for one of the two alone:
+    /// refused, or signed a certificate that says so. (The mutation sweep found
+    /// that no test asked for a validity: a server that refused only an order
+    /// of both, and signed one of either as if it had not been asked, passed.)
+    /// </summary>
+    [TestCase("notBefore")]
+    [TestCase("notAfter")]
+    [Property("Level", "MUST")]
+    public async Task An_Order_Of_A_Validity_Is_Refused_Or_Signed_So(String Field)
+    {
+
+        var asked   = new DateTimeOffset(DateTimeOffset.UtcNow.Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond, TimeSpan.Zero) +
+                      (Field == "notBefore" ? TimeSpan.FromHours(1) : TimeSpan.FromDays(3));
+        var answer  = await Client.PostAsync(account, Client.Resource("newOrder"),
+                                             RawJson.Object(("identifiers", RawACMEClient.IdentifiersJSON([ Loopback4 ])),
+                                                            (Field,         RawJson.Quote(asked.ToString("yyyy-MM-ddTHH:mm:ssZ")))));
+
+        if (answer.Status != 201)
+        {
+            AssertProblem(answer, null);
+            return;
+        }
+
+        var ready   = await Client.ReadyAsync(account, Host, new RawACMEOrder(answer.Location!, answer.Object!));
+        var issued  = await Client.FinishAsync(account, ready, Loopback4);
+
+        using var leaf = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadCertificate(issued.LeafDER);
+
+        var got     = new DateTimeOffset((Field == "notBefore" ? leaf.NotBefore : leaf.NotAfter).ToUniversalTime());
+
+        Assert.That(got, Is.EqualTo(asked), $"the certificate's {Field}: {answer}");
 
     }
 

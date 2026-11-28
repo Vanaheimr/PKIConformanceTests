@@ -604,9 +604,19 @@ public sealed class RawACMEClient : IDisposable
     public async Task<RawACMEOrder> ReadyOrderAsync(RawACMEAccount                         Account,
                                                     ScriptedChallengeHost                  Host,
                                                     params (String Type, String Value)[]  Identifiers)
+
+        => await ReadyAsync(Account, Host, await OrderAsync(Account, Identifiers));
+
+    /// <summary>
+    /// The order - placed already, as the test asked for it - with its every
+    /// authorization proven by http-01 at the host.
+    /// </summary>
+    public async Task<RawACMEOrder> ReadyAsync(RawACMEAccount         Account,
+                                               ScriptedChallengeHost  Host,
+                                               RawACMEOrder           Order)
     {
 
-        var order = await OrderAsync(Account, Identifiers);
+        var order = Order;
 
         foreach (var authorization in order.Authorizations)
         {
@@ -648,9 +658,20 @@ public sealed class RawACMEClient : IDisposable
     public async Task<RawACMEIssued> IssueAsync(RawACMEAccount                         Account,
                                                 ScriptedChallengeHost                  Host,
                                                 params (String Type, String Value)[]  Identifiers)
+
+        => await FinishAsync(Account, await ReadyOrderAsync(Account, Host, Identifiers), Identifiers);
+
+    /// <summary>
+    /// The certificate of a ready order: a CSR of a new P-256 key for the
+    /// identifiers, finalize, download - or an exception that says where it
+    /// stopped.
+    /// </summary>
+    public async Task<RawACMEIssued> FinishAsync(RawACMEAccount                         Account,
+                                                 RawACMEOrder                           Order,
+                                                 params (String Type, String Value)[]  Identifiers)
     {
 
-        var order     = await ReadyOrderAsync(Account, Host, Identifiers);
+        var order     = Order;
 
         if (order.Status != "ready")
             throw new InvalidOperationException($"The order is not ready: {order.JSON.ToJsonString()}");

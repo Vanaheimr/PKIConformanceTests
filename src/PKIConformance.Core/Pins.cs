@@ -25,6 +25,15 @@ public static class Pins
     /// </summary>
     public const String Lib = "/usr/local/lib/pkiconformance";
 
+    /// <summary>
+    /// Where setup-windows.ps1 puts the peers of the Windows leg:
+    /// PKICONFORMANCE_WINDOWS_LIB, or %LOCALAPPDATA%\pkiconformance.
+    /// </summary>
+    public static String WindowsLib
+        => Environment.GetEnvironmentVariable("PKICONFORMANCE_WINDOWS_LIB") is { Length: > 0 } lib
+               ? lib
+               : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "pkiconformance");
+
     private static IReadOnlyDictionary<String, String> Load()
     {
 

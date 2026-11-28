@@ -134,6 +134,28 @@ public partial class FinalizeTests(String ServerName) : ACMEServerFixture(Server
     }
 
     /// <summary>
+    /// <i>"Identifiers of type "dns" MUST appear either in the commonName
+    /// portion of the requested subject name or in an extensionRequest
+    /// attribute [RFC2985] requesting a subjectAltName extension, or both."</i>
+    /// - a commonName is a name the CSR asks for, and one the order does not
+    /// have makes it a CSR of other names: badCSR. (The mutation sweep found
+    /// that no CSR here had a commonName: a server that never read it, and
+    /// signed for the subjectAltName alone, passed.)
+    /// </summary>
+    [TestCase("unordered.example.org")]
+    [TestCase("192.0.2.1")]
+    [Property("Level", "MUST")]
+    public async Task A_CSR_Whose_commonName_Is_Not_Of_The_Order_Is_badCSR(String CommonName)
+    {
+
+        var (account, order) = await ReadyOrderAsync();
+        using var key        = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        AssertProblem(await Client.FinalizeAsync(account, order, RawCSR.CreateBase64Url(key, [ Loopback4 ], CommonName)), 400, "badCSR");
+
+    }
+
+    /// <summary>
     /// Section 11.1: <i>"In particular, when a server receives a finalize
     /// request, it MUST verify that the public key in a CSR is not the same as
     /// the public key of the account key pair used to authenticate that
@@ -196,6 +218,105 @@ public partial class FinalizeTests(String ServerName) : ACMEServerFixture(Server
     }
 
     /// <summary>
+    /// A CSR of a key of RSA, 2048 bits, signed - the kind of key most
+    /// certificates of the world still have. (The mutation sweep found that no
+    /// test here had one: the server's look at the key of a CSR, whether it
+    /// is an account's, was never walked for RSA.)
+    /// </summary>
+    [Test]
+    [Property("Level", "MUST")]
+    public async Task A_CSR_Of_An_RSA_Key_Is_Signed()
+    {
+
+        var (account, order) = await ReadyOrderAsync();
+        using var key        = RSA.Create(2048);
+
+        AssertStatus(await Client.FinalizeAsync(account, order, RawCSR.CreateBase64Url(key, [ Loopback4 ])), 200);
+
+    }
+
+    /// <summary>
+    /// A CSR of a key on a curve nobody knows (1.2.840.10045.3.1.11 for
+    /// P-256's 1.2.840.10045.3.1.7): a CSR the CA is unwilling to sign, and
+    /// <i>"In such cases, the problem document returned by the server SHOULD
+    /// use error code "badCSR""</i> - the client's error, not the server's.
+    /// CertificateRequest.LoadSigningRequest throws a
+    /// PlatformNotSupportedException for it on every platform, which the PKI
+    /// answers 500 (S-19).
+    /// </summary>
+    [Test]
+    [Property("Level", "SHOULD")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-19")]
+    public Task A_CSR_Of_A_Key_On_A_Curve_Nobody_Knows_Is_badCSR()
+
+        => CSROfAKeyThatIsNoneAsync("curve");
+
+    /// <summary>
+    /// The same of a key whose point is off P-256 - where the platform says so
+    /// as a CryptographicException (OpenSSL, on Linux): gating. On Windows CNG
+    /// throws a PlatformNotSupportedException for it as well (S-19):
+    /// <see cref="A_CSR_Of_A_Point_Off_Its_Curve_Is_badCSR_On_Windows"/> is
+    /// the test of that leg, and this one skips there.
+    /// </summary>
+    [Test]
+    [Property("Level", "SHOULD")]
+    public Task A_CSR_Of_A_Point_Off_Its_Curve_Is_badCSR()
+    {
+
+        if (OperatingSystem.IsWindows())
+            Assert.Ignore("Windows refuses such a key otherwise (S-19) - A_CSR_Of_A_Point_Off_Its_Curve_Is_badCSR_On_Windows is the test of this leg.");
+
+        return CSROfAKeyThatIsNoneAsync("point");
+
+    }
+
+    /// <summary>
+    /// <see cref="A_CSR_Of_A_Point_Off_Its_Curve_Is_badCSR"/> on Windows, where
+    /// it is a PlatformNotSupportedException, and so a 500 (S-19). Skips
+    /// elsewhere.
+    /// </summary>
+    [Test]
+    [Property("Level", "SHOULD")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-19")]
+    public Task A_CSR_Of_A_Point_Off_Its_Curve_Is_badCSR_On_Windows()
+    {
+
+        if (!OperatingSystem.IsWindows())
+            Assert.Ignore("This half of S-19 is of Windows alone - A_CSR_Of_A_Point_Off_Its_Curve_Is_badCSR is the test of this leg, and gates.");
+
+        return CSROfAKeyThatIsNoneAsync("point");
+
+    }
+
+    private async Task CSROfAKeyThatIsNoneAsync(String Spoiled)
+    {
+
+        var (account, order) = await ReadyOrderAsync();
+        using var key        = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var der              = RawCSR.Create(key, [ Loopback4 ]);
+
+        if (Spoiled == "curve")
+        {
+            // OBJECT IDENTIFIER 1.2.840.10045.3.1.7, its last arc made 11.
+            var at = der.AsSpan().IndexOf((ReadOnlySpan<Byte>) [ 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07 ]);
+            Assert.That(at, Is.GreaterThan(0), "the CSR names P-256");
+            der[at + 9] = 0x0B;
+        }
+        else
+        {
+            // BIT STRING of 66 octets: no unused bits, 04 (uncompressed), x, y - the last octet of y changed.
+            var at = der.AsSpan().IndexOf((ReadOnlySpan<Byte>) [ 0x03, 0x42, 0x00, 0x04 ]);
+            Assert.That(at, Is.GreaterThan(0), "the CSR has the point of P-256 uncompressed");
+            der[at + 4 + 63] ^= 0x01;
+        }
+
+        AssertProblem(await Client.FinalizeAsync(account, order, RawBase64Url.Encode(der)), 400, "badCSR", "malformed");
+
+    }
+
+    /// <summary>
     /// <i>"The CSR is sent in the base64url-encoded version of the DER
     /// format."</i> - and section 5, <i>"Encoded values that include trailing
     /// '=' characters MUST be rejected as improperly encoded."</i>: the CSR
@@ -223,6 +344,27 @@ public partial class FinalizeTests(String ServerName) : ACMEServerFixture(Server
         csr += new String('=', 4 - csr.Length % 4);
 
         AssertProblem(await Client.FinalizeAsync(account, order, csr), 400, "badCSR", "malformed");
+
+    }
+
+    /// <summary>
+    /// The CSR with a line break in it, as base64 of MIME has them - which
+    /// base64url of RFC 7515, section 2, is <i>"without the inclusion of any
+    /// line breaks, whitespace, or other additional characters"</i>.
+    /// </summary>
+    [Test]
+    [Property("RFC", "8555 §7.4, 7515 §2")]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-14")]
+    public async Task A_CSR_With_Whitespace_Is_Refused()
+    {
+
+        var (account, order) = await ReadyOrderAsync();
+        using var key        = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var csr              = RawCSR.CreateBase64Url(key, [ Loopback4 ]);
+
+        AssertProblem(await Client.FinalizeAsync(account, order, csr[..64] + "\n" + csr[64..]), 400, "badCSR", "malformed");
 
     }
 

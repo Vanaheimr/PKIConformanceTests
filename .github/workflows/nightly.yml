@@ -68,7 +68,7 @@ jobs:
         continue-on-error: true
         run: >
           sh build/bench-namespace.sh dotnet test PKIConformanceTests.slnx --configuration Release --no-build
-          --filter "TestCategory!=Online&TestCategory!=Docker&(TestCategory=KnownIssue|TestCategory=ToDo)"
+          --filter "TestCategory!=Online&TestCategory!=Docker&TestCategory!=Windows&(TestCategory=KnownIssue|TestCategory=ToDo)"
           --logger "trx;LogFilePrefix=open"
           --results-directory artifacts
 
@@ -149,15 +149,72 @@ jobs:
             artifacts/*.trx
             artifacts/boulder.log
 
+  windows:
+    # The peers of Windows - Posh-ACME and win-acme - natively on Windows, no
+    # WSL: the server under test in the test process, on the loopback, what
+    # the peers were issued judged by the runner's own openssl. The peers are
+    # installed by the script a developer runs (build/peers/setup-windows.ps1),
+    # under Windows PowerShell 5.1, which they run in too. Red on any skip, as
+    # the peers lane.
+    name: windows (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '11.0.x'
+
+      - name: Install the peers
+        shell: powershell
+        run: .\build\peers\setup-windows.ps1
+
+      - name: Build
+        run: dotnet build PKIConformanceTests.slnx --configuration Release
+
+      - name: Test (Windows peers)
+        timeout-minutes: 45
+        run: >
+          dotnet test PKIConformanceTests.slnx --configuration Release --no-build
+          --filter "TestCategory=Windows&TestCategory!=KnownIssue&TestCategory!=ToDo"
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFilePrefix=windows"
+          --results-directory artifacts
+
+      - name: No test may have skipped
+        shell: bash
+        run: |
+          skipped=$(cat artifacts/windows*.trx | { grep -o 'outcome="NotExecuted"' || true; } | wc -l)
+          echo "skipped: $skipped"
+          test "$skipped" -eq 0
+
+      - name: Test (Windows peers, KnownIssue and ToDo)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: >
+          dotnet test PKIConformanceTests.slnx --configuration Release --no-build
+          --filter "TestCategory=Windows&(TestCategory=KnownIssue|TestCategory=ToDo)"
+          --logger "trx;LogFilePrefix=windows-open"
+          --results-directory artifacts
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-windows
+          path: artifacts/*.trx
+
   matrix:
     # The interop matrix of the night (docs/INTEROP-MATRIX.md), rendered from
-    # the TRX files of the two lanes above - the gating runs and the red ones
+    # the TRX files of the three lanes above - the gating runs and the red ones
     # of KnownIssue and ToDo, which are the red cells. Red where a test is red
     # without a finding or a ToDo (InteropReport's exit code). Into the job's
     # summary and an artifact; the copy in the repository is committed from a
     # run on a developer machine, so that a diff shows what a night changed.
     name: interop matrix
-    needs: [ peers, boulder ]
+    needs: [ peers, boulder, windows ]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
@@ -169,7 +226,7 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          pattern: nightly-{peers,boulder}
+          pattern: nightly-{peers,boulder,windows}
           path: artifacts
           merge-multiple: true
 
@@ -259,7 +316,7 @@ jobs:
         timeout-minutes: 75
         run: >
           sh build/bench-namespace.sh dotnet test PKIConformanceTests.slnx --configuration Release --no-build
-          --filter "TestCategory!=Online&TestCategory!=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
+          --filter "TestCategory!=Online&TestCategory!=Docker&TestCategory!=Windows&TestCategory!=KnownIssue&TestCategory!=ToDo"
           --logger "console;verbosity=normal"
           --logger "trx;LogFilePrefix=masters"
           --results-directory artifacts
@@ -276,7 +333,7 @@ jobs:
         continue-on-error: true
         run: >
           sh build/bench-namespace.sh dotnet test PKIConformanceTests.slnx --configuration Release --no-build
-          --filter "TestCategory!=Online&TestCategory!=Docker&(TestCategory=KnownIssue|TestCategory=ToDo)"
+          --filter "TestCategory!=Online&TestCategory!=Docker&TestCategory!=Windows&(TestCategory=KnownIssue|TestCategory=ToDo)"
           --logger "trx;LogFilePrefix=masters-open"
           --results-directory artifacts
 

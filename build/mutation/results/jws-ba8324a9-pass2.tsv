@@ -1,0 +1,9 @@
+libs/PKI/PKI/Enrollment/ACMEJWS.cs	141	equality-to-inequality	SURVIVED		0	=> PayloadText.Length == 0;	=> PayloadText.Length != 0;
+libs/PKI/PKI/Enrollment/ACMEJWS.cs	170	false-to-true	SURVIVED		0	#region (static) Parse(Body, MACAllowed = false)	#region (static) Parse(Body, MACAllowed = true)
+libs/PKI/PKI/Enrollment/ACMEJWS.cs	313	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEJWS.cs	430	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEJWS.cs	439	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEJWS.cs	485	false-to-true	KILLED	1 failed: A_CSR_Of_An_RSA_Key_Is_Signed	0	var parameters = rsa.ExportParameters(false);	var parameters = rsa.ExportParameters(true);
+libs/PKI/PKI/Enrollment/ACMEJWS.cs	531	logical-or-to-and	SURVIVED		0	if (x.Length != length || y.Length != length)	if (x.Length != length && y.Length != length)
+libs/PKI/PKI/Enrollment/ACMEJWS.cs	557	greater-to-ge	KILLED	1 failed: An_RSA_jwk_Of_An_Empty_Modulus_Is_badPublicKey	0	var bits = (n.Length - (n.Length > 0 && n[0] == 0 ? 1 : 0)) * 8;	var bits = (n.Length - (n.Length >= 0 && n[0] == 0 ? 1 : 0)) * 8;
+libs/PKI/PKI/Enrollment/ACMEJWS.cs	559	greater-to-ge	KILLED	1 failed: An_RSA_Key_Of_8192_Bits_Opens_An_Account	0	if (bits < MinimumRSABits || bits > 8192)	if (bits < MinimumRSABits || bits >= 8192)

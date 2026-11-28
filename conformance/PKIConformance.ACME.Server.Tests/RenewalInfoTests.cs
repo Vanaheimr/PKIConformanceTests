@@ -133,6 +133,28 @@ public class RenewalInfoTests(String ServerName) : ACMEServerFixture(ServerName)
         => AssertStatus(await RenewalInfoAsync("aYhba4dGQEHhs3uEe6CuLN4ByNQ.AIdlQyE"), 404);
 
     /// <summary>
+    /// Section 4.1: a certificate is named by the keyIdentifier of its
+    /// Authority Key Identifier and its serial - both. The serial of a
+    /// certificate of the server, under another keyIdentifier, names a
+    /// certificate of another CA: not found. (The mutation sweep found that no
+    /// test sent one: a server that looked at the serial alone passed.)
+    /// </summary>
+    [Test]
+    [Property("RFC", "9773 §4.1")]
+    [Property("Level", "SHOULD")]
+    public async Task The_Serial_Of_A_Certificate_Under_Another_keyIdentifier_Is_404()
+    {
+
+        var (_, _, id) = await IssuedAsync();
+        var parts      = id.Split('.');
+        var other      = RawBase64Url.Decode(parts[0]);
+        other[0]      ^= 0xFF;
+
+        AssertStatus(await RenewalInfoAsync($"{RawBase64Url.Encode(other)}.{parts[1]}"), 404);
+
+    }
+
+    /// <summary>
     /// What is no identifier of section 4.1 at all: refused.
     /// </summary>
     [TestCase("not-an-identifier")]

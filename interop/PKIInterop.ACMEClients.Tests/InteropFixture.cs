@@ -26,18 +26,23 @@ namespace PKIInterop.ACMEClients.Tests;
 /// then whether the server keeps it as issued to the account.
 /// </para>
 /// <para>
-/// The peers run natively in Linux - in WSL by build/test-in-wsl.sh, on
-/// Debian in the nightly. A Windows test process skips them, as WSL cannot
-/// reach it through the Windows firewall (PLAN.md, "Learned in phase 0").
+/// Two legs: the peers of Linux (<see cref="InteropFixture"/>), natively in
+/// WSL by build/test-in-wsl.sh or on Debian in the nightly - a Windows test
+/// process skips them, as WSL cannot reach it through the Windows firewall
+/// (PLAN.md, "Learned in phase 0"); and the peers of Windows
+/// (<see cref="WindowsInteropFixture"/>), natively on Windows, against the
+/// server on the loopback, judged by the host's own openssl.
 /// </para>
 /// </remarks>
-[Category(TestCategories.Wsl)]
-public abstract class InteropFixture(String ServerName)
+public abstract class PeerFixture(String ServerName)
 {
 
     #region Properties
 
-    /// <summary>The tools of WSL the fixture needs.</summary>
+    /// <summary>Whether the peers are of WSL (or of Linux), rather than of Windows.</summary>
+    protected abstract Boolean           InWsl        { get; }
+
+    /// <summary>The tools of WSL the fixture needs - or, on the Windows leg, the files of its peers.</summary>
     protected abstract String[]          Tools        { get; }
 
     /// <summary>The client of the fixture and its version - its column of the interop matrix.</summary>
@@ -47,7 +52,7 @@ public abstract class InteropFixture(String ServerName)
     protected IACMEServerUnderTest       Server       { get; private set; } = null!;
 
     /// <summary>The directory as the peers reach it.</summary>
-    protected String                     DirectoryURL => Server.DirectoryURLFromWsl!.ToString();
+    protected String                     DirectoryURL => InWsl ? Server.DirectoryURLFromWsl!.ToString() : Server.DirectoryURL.ToString();
 
     /// <summary>The port http-01 asks at.</summary>
     protected UInt16                     HTTP01Port   { get; private set; }
@@ -74,7 +79,12 @@ public abstract class InteropFixture(String ServerName)
 
     [OneTimeSetUp]
     public void RequirePeers()
-        => TestEnvironment.RequireWsl(Tools);
+    {
+        if (InWsl)
+            TestEnvironment.RequireWsl(Tools);
+        else
+            TestEnvironment.RequireWindows(Tools);
+    }
 
     /// <summary>The test's cell of the interop matrix, into its output (InteropCells).</summary>
     [SetUp]
@@ -121,7 +131,7 @@ public abstract class InteropFixture(String ServerName)
             var answers   = Directory.CreateDirectory(Path.Combine(directory, ".well-known", "acme-challenge")).FullName;
             this.Webroot  = ScriptedChallengeHost.Start();
             this.Webroot.ServeDirectory(answers);
-            WebrootPath   = Wsl.ToWslPath(directory);
+            WebrootPath   = InWsl ? Wsl.ToWslPath(directory) : directory;
             HTTP01Port    = this.Webroot.Port;
         }
         else
@@ -132,13 +142,14 @@ public abstract class InteropFixture(String ServerName)
 
         Server = await ServersUnderTest.StartAsync(ServerName,
                                                    (Options ?? new ACMEServerOptions()) with {
-                                                       ReachableFromWsl  = true,
+                                                       ReachableFromWsl  = InWsl,
                                                        HTTP01Port        = HTTP01Port,
                                                        DNSClient         = this.DNS?.NewDNSClient() ?? Options?.DNSClient
                                                    });
 
-        TestEnvironment.RequireReachableFromWsl(Server.DirectoryURLFromWsl ?? throw new InvalidOperationException($"{Server.Name} is not reachable from WSL."),
-                                                Server.TLS.RootFile);
+        if (InWsl)
+            TestEnvironment.RequireReachableFromWsl(Server.DirectoryURLFromWsl ?? throw new InvalidOperationException($"{Server.Name} is not reachable from WSL."),
+                                                    Server.TLS.RootFile);
 
     }
 
@@ -200,7 +211,8 @@ public abstract class InteropFixture(String ServerName)
         using var ec   = leaf.GetECDsaPublicKey();
         using var rsa  = ec is null ? leaf.GetRSAPublicKey() : null;
 
-        var verified   = OpenSSL.Verify(Server.IssuingRootPEM, ChainPEM!);
+        var verified   = InWsl ? OpenSSL.Verify(Server.IssuingRootPEM, ChainPEM!) : OpenSSL.VerifyNative(Server.IssuingRootPEM, ChainPEM!);
+        var openssl    = InWsl ? OpenSSL.Version : OpenSSL.NativeVersion;
 
         using (Assert.EnterMultipleScope())
         {
@@ -211,7 +223,7 @@ public abstract class InteropFixture(String ServerName)
             Assert.That(leaf.Extensions.OfType<X509EnhancedKeyUsageExtension>().SelectMany(eku => eku.EnhancedKeyUsages.Cast<Oid>()).Select(oid => oid.Value),
                                                                                        Does.Contain("1.3.6.1.5.5.7.3.1"),                "serverAuth");
             Assert.That(leaf.Extensions.OfType<X509AuthorityKeyIdentifierExtension>(), Is.Not.Empty,                                     "the key identifier of the issuer");
-            Assert.That(verified.StdOut,                                               Does.Contain("leaf.pem: OK"),                     $"{OpenSSL.Version} verifies the chain to {Server.Name}'s root: {verified}");
+            Assert.That(verified.StdOut,                                               Does.Contain("leaf.pem: OK"),                     $"{openssl} verifies the chain to {Server.Name}'s root: {verified}");
             Assert.That(Server.Issued().Select(issued => Convert.ToHexString(issued.DER)), Does.Contain(Convert.ToHexString(leaf.RawData)), $"{Server.Name} keeps it as issued");
 
         }
@@ -240,7 +252,10 @@ public abstract class InteropFixture(String ServerName)
 
         var issued  = Server.Issued().FirstOrDefault(candidate => candidate.DER.AsSpan().SequenceEqual(Leaf.RawData));
         var crl     = Server.CRL();
-        var checked_ = crl is not null ? OpenSSL.Verify(Server.IssuingRootPEM, ChainPEM, crl) : null;
+        var checked_ = crl is null ? null
+                     : InWsl       ? OpenSSL.Verify      (Server.IssuingRootPEM, ChainPEM, crl)
+                     :               OpenSSL.VerifyNative(Server.IssuingRootPEM, ChainPEM, crl);
+        var openssl  = InWsl ? OpenSSL.Version : OpenSSL.NativeVersion;
 
         using (Assert.EnterMultipleScope())
         {
@@ -248,7 +263,7 @@ public abstract class InteropFixture(String ServerName)
             if (Reason is not null)
                 Assert.That(issued?.Reason, Is.EqualTo(Reason),                            $"the reason: {Evidence}");
             Assert.That(crl,              Is.Not.Null,                                     $"{Server.Name} has a CRL");
-            Assert.That(checked_?.StdOut, Does.Contain("certificate revoked"),            $"{OpenSSL.Version} finds it in the CRL: {checked_}");
+            Assert.That(checked_?.StdOut, Does.Contain("certificate revoked"),            $"{openssl} finds it in the CRL: {checked_}");
         }
 
     }
@@ -328,4 +343,29 @@ public abstract class InteropFixture(String ServerName)
 
     #endregion
 
+}
+
+
+/// <summary>
+/// The bench of the peers of Linux - certbot, lego, acme.sh, dehydrated,
+/// uacme, Python's acme - natively in WSL or on Debian.
+/// </summary>
+[Category(TestCategories.Wsl)]
+public abstract class InteropFixture(String ServerName) : PeerFixture(ServerName)
+{
+    protected sealed override Boolean InWsl => true;
+}
+
+
+/// <summary>
+/// The bench of the peers of Windows - Posh-ACME, win-acme - natively on
+/// Windows, no WSL: the server on the loopback, its http-01 asking the
+/// bench's web server of a webroot, what they were issued judged by the
+/// host's own openssl. The names of the bench resolve on no Windows that
+/// was left as it was, so its certificates are of addresses (RFC 8738).
+/// </summary>
+[Category(TestCategories.Windows)]
+public abstract class WindowsInteropFixture(String ServerName) : PeerFixture(ServerName)
+{
+    protected sealed override Boolean InWsl => false;
 }

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 
 using NUnit.Framework;
 
@@ -165,6 +166,66 @@ public class RequestAuthenticationTests(String ServerName) : ACMEServerFixture(S
     }
 
     /// <summary>
+    /// <i>"The JWS MUST be in the Flattened JSON Serialization [RFC7515]"</i>
+    /// - and a text cut short of its closing brace, or one with a NUL in it,
+    /// is no JSON (RFC 8259, section 2), and so no serialization of a JWS:
+    /// the request of an account, its three members intact.
+    /// </summary>
+    [TestCase("cut short",  Description = "without its closing brace")]
+    [TestCase("NUL",        Description = "a NUL before its closing brace")]
+    [Property("RFC", "8555 §6.2, 8259 §2")]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-17")]
+    public async Task A_Body_That_Is_No_JSON_Text_Is_Refused(String How)
+    {
+
+        var account = await NewAccountAsync();
+
+        var answer  = await Client.PostAsync(account, account.URL, null,
+                                             Body: jws => How == "NUL"
+                                                              ? jws.ToFlattenedJSON()[..^1] + "\u0000}"
+                                                              : jws.ToFlattenedJSON()[..^1]);
+
+        AssertProblem(answer, 400, "malformed");
+
+    }
+
+    /// <summary>
+    /// The payload of a newAccount request is the JSON of an account object
+    /// (section 7.3), and the protected header is JSON too (RFC 7515, section
+    /// 5.2, step 3: <i>"Verify that the resulting octet sequence is a
+    /// UTF-8-encoded representation of a completely valid JSON object"</i>) -
+    /// one of them cut short of its closing brace, or with a NUL between its
+    /// tokens, which RFC 8259, section 2, has no JSON text either; signed as
+    /// it is sent, so that nothing but that is wrong with it. (The protected
+    /// header cut short is refused.)
+    /// </summary>
+    [TestCase("payload",   "cut short")]
+    [TestCase("payload",   "NUL")]
+    [TestCase("protected", "NUL")]
+    [Property("RFC", "8555 §7.3, 7515 §5.2, 8259 §2")]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-17")]
+    public async Task A_Part_Of_The_JWS_That_Is_No_JSON_Text_Is_Refused(String Part, String How)
+    {
+
+        using var key  = RawKey.Generate("ES256");
+        var header     = new JWSHeader().SetString("alg", "ES256").Set("jwk", key.JWK.ToJSON()).SetString("nonce", await Client.NonceAsync()).SetString("url", NewAccountURL).ToJSON();
+
+        String Spoil(String JSON)
+            => How == "NUL" ? "{\u0000" + JSON[1..] : JSON[..^1];
+
+        var jws        = RawJWS.Sign(key,
+                                     Part == "protected" ? Spoil(header) : header,
+                                     Part == "payload"   ? Spoil(Agreed) : Agreed);
+
+        AssertProblem(await Client.SendAsync(HttpMethod.Post, NewAccountURL, Encoding.UTF8.GetBytes(jws.ToFlattenedJSON())), 400, "malformed");
+
+    }
+
+    /// <summary>
     /// <i>"The JWS Unencoded Payload Option [RFC7797] MUST NOT be used"</i> -
     /// a header of "b64": false, made critical as RFC 7797, section 6, asks.
     /// The payload is base64url still and the signature is over it as RFC
@@ -212,6 +273,33 @@ public class RequestAuthenticationTests(String ServerName) : ACMEServerFixture(S
     #endregion
 
     #region Algorithms
+
+    /// <summary>
+    /// <i>"If the client sends a JWS signed with an algorithm that the server
+    /// does not support, then the server MUST return an error with status code
+    /// 400 (Bad Request) and type
+    /// "urn:ietf:params:acme:error:badSignatureAlgorithm"."</i> - and an "alg"
+    /// that is no string (RFC 7515, section 4.1.1: <i>"The "alg" value is a
+    /// case-sensitive ASCII string"</i>) is no algorithm it supports; malformed
+    /// says as much.
+    /// </summary>
+    [TestCase("""["ES256"]""",           Description = "an array of it")]
+    [TestCase("""{"alg":"ES256"}""",     Description = "an object of it")]
+    [TestCase("{}",                      Description = "an empty object")]
+    [TestCase("9223372036854775808",     Description = "2^63")]
+    [Property("RFC", "8555 §6.2, 7515 §4.1.1")]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-15")]
+    public async Task An_alg_That_Is_No_String_Is_badSignatureAlgorithm(String Algorithm)
+    {
+
+        using var key = RawKey.Generate("ES256");
+
+        AssertProblem(await Client.PostAsync(key, null, NewAccountURL, Agreed, Header: header => header.Set("alg", Algorithm)),
+                      400, "badSignatureAlgorithm", "malformed");
+
+    }
 
     /// <summary>
     /// <i>"If the client sends a JWS signed with an algorithm that the server
@@ -297,6 +385,45 @@ public class RequestAuthenticationTests(String ServerName) : ACMEServerFixture(S
                                              Header: header => header.Set("jwk", account.Key.JWK.ToJSON()));
 
         AssertProblem(answer, 400);
+
+    }
+
+    /// <summary>
+    /// <i>"Servers MUST reject requests that contain both."</i> - a "jwk" that
+    /// is no key, beside the "kid" of the account: the request contains both
+    /// fields, whatever the one is.
+    /// </summary>
+    [TestCase("\"\"",  Description = "an empty string")]
+    [TestCase("-1",    Description = "a number")]
+    [TestCase("[]",    Description = "an empty array")]
+    [TestCase("null",  Description = "null")]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-16")]
+    public async Task A_Request_With_A_kid_And_A_jwk_That_Is_No_Key_Is_Refused(String JWK)
+    {
+
+        var account = await NewAccountAsync();
+
+        AssertProblem(await Client.PostAsync(account.Key, account.URL, account.URL, null, Header: header => header.Set("jwk", JWK)), 400);
+
+    }
+
+    /// <summary>
+    /// <i>"Servers MUST reject requests that contain both."</i> - the other
+    /// way round: a newAccount request of its "jwk", with a "kid" of null
+    /// beside it.
+    /// </summary>
+    [Test]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-16")]
+    public async Task A_Request_With_A_jwk_And_A_kid_Of_null_Is_Refused()
+    {
+
+        using var key = RawKey.Generate("ES256");
+
+        AssertProblem(await Client.PostAsync(key, null, NewAccountURL, Agreed, Header: header => header.Set("kid", "null")), 400);
 
     }
 
@@ -417,6 +544,77 @@ public class RequestAuthenticationTests(String ServerName) : ACMEServerFixture(S
 
     }
 
+    /// <summary>
+    /// <i>"If the server supports the signature algorithm "alg" but either does
+    /// not support or chooses to reject the public key "jwk", then the server
+    /// MUST return an error with status code 400 (Bad Request) and type
+    /// "urn:ietf:params:acme:error:badPublicKey"."</i> - a member of the "jwk"
+    /// that is no string (RFC 7518, section 6.2.1: "crv", "x", "y" are strings;
+    /// RFC 7517, section 4.1: so is "kty"), which is no key of P-256.
+    /// </summary>
+    [TestCase("kty", """["EC"]""")]
+    [TestCase("crv", """["P-256"]""")]
+    [TestCase("x",   "{}")]
+    [TestCase("y",   "[]")]
+    [Property("RFC", "8555 §6.2, 7518 §6.2.1")]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-15")]
+    public async Task A_Member_Of_The_jwk_That_Is_No_String_Is_badPublicKey(String Member, String Value)
+    {
+
+        using var key = RawKey.Generate("ES256");
+        var jwk       = JsonNode.Parse(key.JWK.ToJSON())!.AsObject();
+        jwk[Member]   = JsonNode.Parse(Value);
+
+        AssertProblem(await Client.PostAsync(key, null, NewAccountURL, Agreed, Header: header => header.Set("jwk", jwk.ToJsonString())),
+                      400, "badPublicKey", "malformed");
+
+    }
+
+    /// <summary>
+    /// RFC 7518, section 6.2.1.2: <i>"It is represented as the base64url
+    /// encoding of the octet string representation of the coordinate"</i> -
+    /// and base64url of RFC 7515, section 2, is <i>"without the inclusion of
+    /// any line breaks, whitespace, or other additional characters"</i>: a
+    /// coordinate of the "jwk" with whitespace in it is no key of P-256.
+    /// </summary>
+    [TestCase("x", " ",  Description = "a space in x")]
+    [TestCase("y", "\n", Description = "a line break in y")]
+    [Property("RFC", "8555 §6.2, 7518 §6.2.1.2, 7515 §2")]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-14")]
+    public Task A_Coordinate_Of_The_jwk_With_Whitespace_Is_Refused(String Member, String Whitespace)
+
+        => CoordinateRefusedAsync(Member, coordinate => coordinate[..8] + Whitespace + coordinate[8..]);
+
+    /// <summary>
+    /// Section 5: <i>"Encoded values that include trailing '=' characters MUST
+    /// be rejected as improperly encoded."</i> - a coordinate of the "jwk"
+    /// padded.
+    /// </summary>
+    [Test]
+    [Property("RFC", "8555 §5")]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-1")]
+    public Task A_Coordinate_Of_The_jwk_With_Padding_Is_Refused()
+
+        => CoordinateRefusedAsync("x", coordinate => coordinate + "=");
+
+    private async Task CoordinateRefusedAsync(String Member, Func<String, String> Spoil)
+    {
+
+        using var key  = RawKey.Generate("ES256");
+        var jwk        = JsonNode.Parse(key.JWK.ToJSON())!.AsObject();
+        jwk[Member]    = Spoil(jwk[Member]!.GetValue<String>());
+
+        AssertProblem(await Client.PostAsync(key, null, NewAccountURL, Agreed, Header: header => header.Set("jwk", jwk.ToJsonString())),
+                      400, "badPublicKey", "malformed");
+
+    }
+
     private async Task PointOffTheCurveIsBadPublicKeyAsync()
     {
 
@@ -444,6 +642,39 @@ public class RequestAuthenticationTests(String ServerName) : ACMEServerFixture(S
         using var key = RawKey.Generate("RS256", RSABits: 1024);
 
         AssertProblem(await Client.PostAsync(key, null, NewAccountURL, Agreed), 400, "badPublicKey");
+
+    }
+
+    /// <summary>
+    /// An RSA key of 8192 bits - the most the server takes - opens an account:
+    /// the bound, from its side. (The mutation sweep found the bound untested.)
+    /// </summary>
+    [Test]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.Slow)]
+    public async Task An_RSA_Key_Of_8192_Bits_Opens_An_Account()
+    {
+
+        using var key = RawKey.Generate("RS256", RSABits: 8192);
+
+        AssertStatus(await Client.PostAsync(key, null, NewAccountURL, Agreed), 201);
+
+    }
+
+    /// <summary>
+    /// An RSA "jwk" whose modulus is empty - no key at all: badPublicKey, not
+    /// the server's error. (The mutation sweep found it untested.)
+    /// </summary>
+    [Test]
+    [Property("RFC", "8555 §6.2, 7518 §6.3.1")]
+    [Property("Level", "MUST")]
+    public async Task An_RSA_jwk_Of_An_Empty_Modulus_Is_badPublicKey()
+    {
+
+        using var key = RawKey.Generate("RS256");
+
+        AssertProblem(await Client.PostAsync(key, null, NewAccountURL, Agreed, Header: header => header.Set("jwk", """{"e":"AQAB","kty":"RSA","n":""}""")),
+                      400, "badPublicKey", "malformed");
 
     }
 
@@ -597,6 +828,33 @@ public class RequestAuthenticationTests(String ServerName) : ACMEServerFixture(S
         Assert.That(jws.Protected + jws.Payload + jws.Signature, Does.Contain("="), "the arrangement pads");
 
         AssertProblem(await Client.SendAsync(HttpMethod.Post, NewAccountURL, Encoding.UTF8.GetBytes(jws.ToFlattenedJSON())), 400);
+
+    }
+
+    /// <summary>
+    /// RFC 7515, section 5.2, step 7: <i>"Base64url-decode the encoded
+    /// representation of the JWS Signature, following the restriction that no
+    /// line breaks, whitespace, or other additional characters have been
+    /// used."</i> - a signature with whitespace in it. What was signed is
+    /// unchanged, as the signature is not part of it: nothing but the
+    /// whitespace is wrong with the request.
+    /// </summary>
+    [TestCase(" ",  Description = "a space")]
+    [TestCase("\n", Description = "a line break")]
+    [TestCase("\t", Description = "a tab")]
+    [Property("RFC", "7515 §5.2, §2")]
+    [Property("Level", "MUST")]
+    [Category(TestCategories.KnownIssue)]
+    [Property("Finding", "S-14")]
+    public async Task A_Signature_With_Whitespace_In_It_Is_Refused(String Whitespace)
+    {
+
+        using var key = RawKey.Generate("ES256");
+
+        var answer = await Client.PostAsync(key, null, NewAccountURL, Agreed,
+                                            Body: jws => new RawJWS(jws.Protected, jws.Payload, jws.Signature[..10] + Whitespace + jws.Signature[10..]).ToFlattenedJSON());
+
+        AssertProblem(answer, 400, "malformed");
 
     }
 

@@ -11,6 +11,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The driver of Python's acme, written into the peer's directory by
+         PythonACME: PKIConformance.Core.Peers.PythonACME.py. -->
+    <EmbeddedResource Include="Peers\PythonACME.py" LogicalName="PKIConformance.Core.Peers.PythonACME.py" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\libs\Styx\Styx\Styx.csproj" />
     <ProjectReference Include="..\..\libs\Hermod\Hermod\Hermod.csproj" />
     <ProjectReference Include="..\..\libs\PKI\PKI\PKI.csproj" />

@@ -74,6 +74,34 @@ public static class TestEnvironment
 
     #endregion
 
+    #region Windows
+
+    /// <summary>
+    /// What build/peers/setup-windows.ps1 installs, for the hints below.
+    /// </summary>
+    public const String WindowsSetupHint = @"powershell -ExecutionPolicy Bypass -File build\peers\setup-windows.ps1";
+
+    /// <summary>
+    /// Require Windows, with the given files of the Windows leg's peers
+    /// installed (Pins.WindowsLib) and the host's own openssl to judge by.
+    /// </summary>
+    public static void RequireWindows(params String[] Files)
+    {
+
+        if (!OperatingSystem.IsWindows())
+            Assert.Ignore("The peers of the Windows leg run on Windows - skipping.");
+
+        foreach (var file in Files)
+            if (!File.Exists(file))
+                Assert.Ignore($"'{file}' not found - skipping. Install the peers of the Windows leg: {WindowsSetupHint}");
+
+        if (OpenSSL.NativeExecutable is null)
+            Assert.Ignore("No openssl.exe on the PATH, which judges what the Windows leg was issued - skipping. Git for Windows has one.");
+
+    }
+
+    #endregion
+
     #region Bench names / system trust
 
     /// <summary>

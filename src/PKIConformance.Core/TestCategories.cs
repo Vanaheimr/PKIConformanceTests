@@ -2,7 +2,7 @@ namespace PKIConformance.Core;
 
 /// <summary>
 /// NUnit category names used to gate tests on external prerequisites.
-/// Default CI filter: TestCategory!=Online&amp;TestCategory!=WSL&amp;TestCategory!=Docker&amp;TestCategory!=KnownIssue&amp;TestCategory!=ToDo.
+/// Default CI filter: TestCategory!=Online&amp;TestCategory!=WSL&amp;TestCategory!=Windows&amp;TestCategory!=Docker&amp;TestCategory!=KnownIssue&amp;TestCategory!=ToDo.
 /// </summary>
 public static class TestCategories
 {
@@ -17,6 +17,12 @@ public static class TestCategories
     /// installed: certbot, lego, acme.sh, Pebble, BIND (build/peers/setup-wsl.sh).
     /// </summary>
     public const String Wsl         = "WSL";
+
+    /// <summary>
+    /// Needs Windows with the peers of the Windows leg installed: Posh-ACME
+    /// and win-acme (build/peers/setup-windows.ps1) - run natively, no WSL.
+    /// </summary>
+    public const String Windows     = "Windows";
 
     /// <summary>
     /// Needs a reachable Docker daemon (Boulder).

@@ -1,0 +1,44 @@
+libs/PKI/PKI/Enrollment/ACMEState.cs	101	false-to-true	SURVIVED		0	JSON.Value<Boolean?>("agreedToTerms") ?? false,	JSON.Value<Boolean?>("agreedToTerms") ?? true,
+libs/PKI/PKI/Enrollment/ACMEState.cs	285	logical-or-to-and	SURVIVED		0	: Error is not null || Now > Expires                                              ? "invalid"	: Error is not null && Now > Expires                                              ? "invalid"
+libs/PKI/PKI/Enrollment/ACMEState.cs	285	greater-to-ge	SURVIVED		0	: Error is not null || Now > Expires                                              ? "invalid"	: Error is not null || Now >= Expires                                              ? "invalid"
+libs/PKI/PKI/Enrollment/ACMEState.cs	343	greater-to-ge	SURVIVED		0	=> Status is "pending" or "valid" && Now > Expires	=> Status is "pending" or "valid" && Now >= Expires
+libs/PKI/PKI/Enrollment/ACMEState.cs	512	greater-to-ge	SURVIVED		0	while (nonceQueue.Count > 0 &&	while (nonceQueue.Count >= 0 &&
+libs/PKI/PKI/Enrollment/ACMEState.cs	513	logical-or-to-and	SURVIVED		1	(nonceQueue.Count > MaxNonces || !nonces.TryGetValue(nonceQueue.Peek(), out var issuedAt) || now - issuedAt > NonceLifetime))	(nonceQueue.Count > MaxNonces || !nonces.TryGetValue(nonceQueue.Peek(), out var issuedAt) && now - issuedAt > NonceLifetime))
+libs/PKI/PKI/Enrollment/ACMEState.cs	513	greater-to-ge	SURVIVED		0	(nonceQueue.Count > MaxNonces || !nonces.TryGetValue(nonceQueue.Peek(), out var issuedAt) || now - issuedAt > NonceLifetime))	(nonceQueue.Count >= MaxNonces || !nonces.TryGetValue(nonceQueue.Peek(), out var issuedAt) || now - issuedAt > NonceLifetime))
+libs/PKI/PKI/Enrollment/ACMEState.cs	513	greater-to-ge	SURVIVED		1	(nonceQueue.Count > MaxNonces || !nonces.TryGetValue(nonceQueue.Peek(), out var issuedAt) || now - issuedAt > NonceLifetime))	(nonceQueue.Count > MaxNonces || !nonces.TryGetValue(nonceQueue.Peek(), out var issuedAt) || now - issuedAt >= NonceLifetime))
+libs/PKI/PKI/Enrollment/ACMEState.cs	535	logical-and-to-or	SURVIVED		0	return nonces.Remove(Nonce, out var issuedAt) && Now - issuedAt <= NonceLifetime;	return nonces.Remove(Nonce, out var issuedAt) || Now - issuedAt <= NonceLifetime;
+libs/PKI/PKI/Enrollment/ACMEState.cs	535	le-to-less	SURVIVED		0	return nonces.Remove(Nonce, out var issuedAt) && Now - issuedAt <= NonceLifetime;	return nonces.Remove(Nonce, out var issuedAt) && Now - issuedAt < NonceLifetime;
+libs/PKI/PKI/Enrollment/ACMEState.cs	574	false-to-true	SURVIVED		0	[NotNullWhen(false)] out String?  Error)	[NotNullWhen(true)] out String?  Error)
+libs/PKI/PKI/Enrollment/ACMEState.cs	580	false-to-true	SURVIVED		0	Taken = false;	Taken = true;
+libs/PKI/PKI/Enrollment/ACMEState.cs	586	true-to-false	SURVIVED		0	Taken = true;	Taken = false;
+libs/PKI/PKI/Enrollment/ACMEState.cs	588	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEState.cs	596	true-to-false	SURVIVED		0	Taken = true;	Taken = false;
+libs/PKI/PKI/Enrollment/ACMEState.cs	598	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEState.cs	603	true-to-false	SURVIVED		0	Taken = true;	Taken = false;
+libs/PKI/PKI/Enrollment/ACMEState.cs	605	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEState.cs	619	is-not-null-to-is-null	SURVIVED		0	if (key is not null)	if (key is null)
+libs/PKI/PKI/Enrollment/ACMEState.cs	622	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEState.cs	634	false-to-true	SURVIVED		0	[NotNullWhen(false)] out String?  Error)	[NotNullWhen(true)] out String?  Error)
+libs/PKI/PKI/Enrollment/ACMEState.cs	648	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEState.cs	676	true-to-false	SURVIVED		0	[NotNullWhen(true)]  out ACMEExternalAccountKey? Key,	[NotNullWhen(false)]  out ACMEExternalAccountKey? Key,
+libs/PKI/PKI/Enrollment/ACMEState.cs	677	false-to-true	SURVIVED		0	[NotNullWhen(false)] out String?                 Error)	[NotNullWhen(true)] out String?                 Error)
+libs/PKI/PKI/Enrollment/ACMEState.cs	699	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEState.cs	711	false-to-true	SURVIVED		0	[NotNullWhen(false)] out String?  Error)	[NotNullWhen(true)] out String?  Error)
+libs/PKI/PKI/Enrollment/ACMEState.cs	717	negation-removed	SURVIVED		0	NotFound = !externalKeys.Remove(KeyId, out var key);	NotFound = externalKeys.Remove(KeyId, out var key);
+libs/PKI/PKI/Enrollment/ACMEState.cs	722	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEState.cs	726	true-to-false	SURVIVED		0	return true;	return false;
+libs/PKI/PKI/Enrollment/ACMEState.cs	729	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEState.cs	748	equality-to-inequality	SURVIVED		0	return [.. issued.Values.Where(one => one.AccountId == AccountId).OrderBy(one => one.IssuedAt)];	return [.. issued.Values.Where(one => one.AccountId != AccountId).OrderBy(one => one.IssuedAt)];
+libs/PKI/PKI/Enrollment/ACMEState.cs	761	false-to-true	SURVIVED		0	[NotNullWhen(false)] out String?  Error)	[NotNullWhen(true)] out String?  Error)
+libs/PKI/PKI/Enrollment/ACMEState.cs	770	true-to-false	SURVIVED		0	return true;	return false;
+libs/PKI/PKI/Enrollment/ACMEState.cs	773	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEState.cs	828	greater-to-ge	SURVIVED		0	authorization.Expires > now + TimeSpan.FromDays(1));	authorization.Expires >= now + TimeSpan.FromDays(1));
+libs/PKI/PKI/Enrollment/ACMEState.cs	844	greater-to-ge	SURVIVED		0	foreach (var old in orders.Values.Where(order => now - order.Expires > TimeSpan.FromDays(1)).ToList())	foreach (var old in orders.Values.Where(order => now - order.Expires >= TimeSpan.FromDays(1)).ToList())
+libs/PKI/PKI/Enrollment/ACMEState.cs	849	logical-and-to-or	SURVIVED		0	foreach (var old in authorizations.Values.Where(authorization => !kept.Contains(authorization) && now - authorization.Expires > TimeSpan.FromDays(1)).ToList())	foreach (var old in authorizations.Values.Where(authorization => !kept.Contains(authorization) || now - authorization.Expires > TimeSpan.FromDays(1)).ToList())
+libs/PKI/PKI/Enrollment/ACMEState.cs	849	greater-to-ge	SURVIVED		0	foreach (var old in authorizations.Values.Where(authorization => !kept.Contains(authorization) && now - authorization.Expires > TimeSpan.FromDays(1)).ToList())	foreach (var old in authorizations.Values.Where(authorization => !kept.Contains(authorization) && now - authorization.Expires >= TimeSpan.FromDays(1)).ToList())
+libs/PKI/PKI/Enrollment/ACMEState.cs	849	negation-removed	SURVIVED		0	foreach (var old in authorizations.Values.Where(authorization => !kept.Contains(authorization) && now - authorization.Expires > TimeSpan.FromDays(1)).ToList())	foreach (var old in authorizations.Values.Where(authorization => kept.Contains(authorization) && now - authorization.Expires > TimeSpan.FromDays(1)).ToList())
+libs/PKI/PKI/Enrollment/ACMEState.cs	878	logical-and-to-or	SURVIVED		0	return orders.Values.Count(order => order.Account == Account && order.StatusAt(now) is "pending" or "ready");	return orders.Values.Count(order => order.Account == Account || order.StatusAt(now) is "pending" or "ready");
+libs/PKI/PKI/Enrollment/ACMEState.cs	878	equality-to-inequality	SURVIVED		0	return orders.Values.Count(order => order.Account == Account && order.StatusAt(now) is "pending" or "ready");	return orders.Values.Count(order => order.Account != Account && order.StatusAt(now) is "pending" or "ready");
+libs/PKI/PKI/Enrollment/ACMEState.cs	890	false-to-true	SURVIVED		0	private Boolean TrySave([NotNullWhen(false)] out String? Error)	private Boolean TrySave([NotNullWhen(true)] out String? Error)
+libs/PKI/PKI/Enrollment/ACMEState.cs	898	false-to-true	SURVIVED		0	return false;	return true;
+libs/PKI/PKI/Enrollment/ACMEState.cs	932	false-to-true	SURVIVED		0	return false;	return true;

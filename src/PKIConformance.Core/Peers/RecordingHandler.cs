@@ -104,6 +104,14 @@ public sealed class RecordingHandler : DelegatingHandler
     { }
 
     /// <summary>
+    /// A handler that trusts the TLS of a server as the system does - for a
+    /// public CA of the world, such as Let's Encrypt's staging.
+    /// </summary>
+    public RecordingHandler()
+        : base(new SocketsHttpHandler())
+    { }
+
+    /// <summary>
     /// A handler of HttpClient that trusts the TLS of a server by the given
     /// root alone, the name checked as ever.
     /// </summary>

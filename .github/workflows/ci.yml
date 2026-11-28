@@ -76,7 +76,7 @@ jobs:
         timeout-minutes: 30
         run: >
           dotnet test PKIConformanceTests.slnx --configuration Release --no-build
-          --filter "TestCategory!=Online&TestCategory!=WSL&TestCategory!=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
+          --filter "TestCategory!=Online&TestCategory!=WSL&TestCategory!=Windows&TestCategory!=Docker&TestCategory!=KnownIssue&TestCategory!=ToDo"
           --logger "console;verbosity=normal"
           --logger "trx;LogFilePrefix=offline"
           --results-directory artifacts

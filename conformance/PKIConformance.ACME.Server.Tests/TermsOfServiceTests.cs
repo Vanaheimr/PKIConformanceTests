@@ -1,5 +1,6 @@
 using NUnit.Framework;
 
+using PKIConformance.Core.Scripted;
 using PKIConformance.Core.Servers;
 
 namespace PKIConformance.ACME.Server.Tests;
@@ -64,6 +65,7 @@ public class TermsOfServiceTests(String ServerName) : ACMEServerFixture(ServerNa
         Assert.Multiple(() => {
             AssertStatus(answer, 201);
             Assert.That(account, Is.Not.Null, answer.ToString());
+            Assert.That(Agreement(answer), Is.EqualTo("true"), $"\"termsOfServiceAgreed\", where it is there, is what the client said: {answer}");
         });
 
     }
@@ -86,8 +88,19 @@ public class TermsOfServiceTests(String ServerName) : ACMEServerFixture(ServerNa
             AssertStatus(answer, 200);
             AssertStatus(after,  200);
             Assert.That(after.StringOf("status"), Is.EqualTo("valid"), after.ToString());
+            Assert.That(Agreement(after),         Is.EqualTo("true"),  $"the agreement not taken back: {after}");
         });
 
     }
+
+    /// <summary>
+    /// The "termsOfServiceAgreed" of an account object, as JSON - "true"
+    /// where it is not there: the field is optional in the object (section
+    /// 7.1.2), and a server that leaves it out says nothing wrong. (The
+    /// mutation sweep found that no test looked at it: a server that said
+    /// false of an account that agreed passed.)
+    /// </summary>
+    private static String Agreement(RawACMEResponse Answer)
+        => Answer.Object?["termsOfServiceAgreed"]?.ToJsonString() ?? "true";
 
 }

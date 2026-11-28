@@ -224,7 +224,8 @@ public sealed class PKIACMEServer : IACMEServerUnderTest
                                                                account.JWK.Value<String>("kty") == "RSA"
                                                                    ? (Base64UrlLength(account.JWK.Value<String>("n")) * 8).ToString()
                                                                    : account.JWK.Value<String>("crv"),
-                                                               account.ExternalAccount)) ];
+                                                               account.ExternalAccount,
+                                                               RawACME.RawJWK.Parse(account.JWK.ToString()).Thumbprint)) ];
 
     /// <inheritdoc/>
     public IReadOnlyList<ServerIssued> Issued()

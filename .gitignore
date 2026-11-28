@@ -14,3 +14,8 @@ build/linux/
 # Visual Studio's per-solution state: window layout, the browse database,
 # and the file-watcher cache. Machine-local, and large.
 .vs/
+
+# A mutation sweep's progress, one line a mutant: what it found is in
+# build/mutation/results/*.tsv, which is committed.
+build/mutation/results/*.log
+build/mutation/__pycache__/

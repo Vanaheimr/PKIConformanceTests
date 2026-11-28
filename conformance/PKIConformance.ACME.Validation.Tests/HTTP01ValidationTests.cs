@@ -211,10 +211,14 @@ public class HTTP01ValidationTests(String ServerName) : ValidationFixture(Server
 
     /// <summary>
     /// A host that never answers: the validation fails, in its time - it does
-    /// not stay "processing" for ever.
+    /// not stay "processing" for ever - and says why as section 6.7 has it:
+    /// <i>"connection: The server could not connect to validation target"</i>,
+    /// not as an error of its own. (The mutation sweep found the type
+    /// unasked: a validator whose timeout escaped it was green here.)
     /// </summary>
     [Test]
     [Category(TestCategories.Slow)]
+    [Property("RFC", "8555 §8.3, §6.7")]
     [Property("Level", "MUST")]
     public async Task A_Host_That_Never_Answers_Is_No_Proof()
     {
@@ -222,6 +226,8 @@ public class HTTP01ValidationTests(String ServerName) : ValidationFixture(Server
         var validation = await AnsweredAsync(Loopback4, (_, _) => new HostAnswer(Hang: true));
 
         AssertNoProof(validation);
+
+        Assert.That(validation.ErrorType, Is.EqualTo("connection"), validation.ToString());
 
     }
 

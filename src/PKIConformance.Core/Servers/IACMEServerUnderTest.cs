@@ -83,12 +83,14 @@ public interface IACMEServerUnderTest : IAsyncDisposable
 /// <param name="KeyType">The "kty" of its key: "EC" or "RSA".</param>
 /// <param name="KeyDetail">The curve of an EC key, the modulus size in bits of an RSA key.</param>
 /// <param name="ExternalAccount">The key identifier of its external account binding, if any.</param>
+/// <param name="Thumbprint">The thumbprint of its key (RFC 7638), base64url - what a key change (section 7.3.5) changes.</param>
 public sealed record ServerAccount(String                 Id,
                                    String                 Status,
                                    IReadOnlyList<String>  Contacts,
                                    String                 KeyType,
                                    String?                KeyDetail,
-                                   String?                ExternalAccount);
+                                   String?                ExternalAccount,
+                                   String?                Thumbprint = null);
 
 /// <summary>
 /// A certificate the server under test issued over ACME.

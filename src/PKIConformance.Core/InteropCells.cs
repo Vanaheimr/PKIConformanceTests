@@ -53,6 +53,8 @@ public static class InteropCells
     public const String AccountKeyRollover     = "Account: key rollover";
     /// <summary>Section 6.2: the kinds of account key, and one refused.</summary>
     public const String AccountKeys            = "Account: kinds of key";
+    /// <summary>Section 7.5.2: an authorization given up, and nothing issued on it any more.</summary>
+    public const String AuthorizationDeactivated = "Authorization: deactivated";
     /// <summary>Section 8.3, the client's own web server.</summary>
     public const String Http01OwnServer        = "http-01: own web server";
     /// <summary>Section 8.3, files in a webroot the bench serves.</summary>
@@ -85,6 +87,8 @@ public static class InteropCells
     public const String RevokedByAccount       = "Revocation by the account, in the CRL";
     /// <summary>Section 7.6: by the certificate's own key.</summary>
     public const String RevokedByCertificateKey = "Revocation by the certificate's key";
+    /// <summary>Section 7.6: by another account, which proved every name of it.</summary>
+    public const String RevokedByProof         = "Revocation by an account that proved the names";
     /// <summary>RFC 8737 asked for alone, which the PKI does not offer.</summary>
     public const String TlsAlpn01Alone         = "tls-alpn-01 alone: no challenge for it";
     /// <summary>Section 6.7: a name the server does not sign for.</summary>
@@ -93,21 +97,26 @@ public static class InteropCells
     public const String RefusedNoEAB           = "Refused: externalAccountRequired";
     /// <summary>Section 8.3: a wrong answer at the token's path.</summary>
     public const String RefusedWrongAnswer     = "Refused: a wrong answer";
+    /// <summary>Section 7.4: a CSR of other names than the order's.</summary>
+    public const String RefusedOtherNamesCSR   = "Refused: a CSR of other names (badCSR)";
     /// <summary>RFC 8738, section 3: an address ordered as a DNS name, by a client without RFC 8738.</summary>
     public const String RefusedAddressAsName   = "Refused: an address ordered as a DNS name";
 
     /// <summary>The rows of interop A, in their order.</summary>
     public static readonly IReadOnlyList<String> ClientRows = [
-        Account, AccountEAB, AccountContact, AccountDeactivated, AccountKeyRollover, AccountKeys,
+        Account, AccountEAB, AccountContact, AccountDeactivated, AccountKeyRollover, AccountKeys, AuthorizationDeactivated,
         Http01OwnServer, Http01Webroot, Dns01Record, Dns01Certificate, Wildcard, SixteenNames, IPv4, IPv6,
         OwnCSR, CertificateKeys, Profiles, RenewalForced, RenewalByARI, RenewalReplaces,
-        RevokedByAccount, RevokedByCertificateKey, TlsAlpn01Alone, RefusedName, RefusedNoEAB, RefusedWrongAnswer, RefusedAddressAsName
+        RevokedByAccount, RevokedByCertificateKey, RevokedByProof, TlsAlpn01Alone, RefusedName, RefusedNoEAB, RefusedWrongAnswer, RefusedOtherNamesCSR,
+        RefusedAddressAsName
     ];
 
     #endregion
 
     #region Interop B - Hermod against real servers
 
+    /// <summary>Section 7.1.1: the directory, as Hermod reads it.</summary>
+    public const String HermodDirectory        = "Directory: read";
     /// <summary>Section 7.3.</summary>
     public const String HermodAccount          = "Account: new + ToS + contact";
     /// <summary>Section 7.3.1: the same key finds the same account.</summary>
@@ -165,7 +174,7 @@ public static class InteropCells
 
     /// <summary>The rows of interop B, in their order.</summary>
     public static readonly IReadOnlyList<String> ServerRows = [
-        HermodAccount, HermodAccountFound, HermodAccountNone, HermodEABBound, HermodEABMissing, HermodEABWrongMAC,
+        HermodDirectory, HermodAccount, HermodAccountFound, HermodAccountNone, HermodEABBound, HermodEABMissing, HermodEABWrongMAC,
         HermodHttp01, HermodHttp01Sixteen, HermodDns01, HermodWildcard, HermodIPv4, HermodIPv6, HermodCertificateKeys,
         HermodNonceStorm, HermodChains, HermodAlternateRoots, HermodAuthzReuse,
         HermodProfileIssued, HermodProfileUnknown, HermodProfileUnadvertised, HermodARIWindow, HermodARIReplaces,
